@@ -1,0 +1,80 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600&display=swap');
+@import "tailwindcss";
+@tailwind utilities;
+
+.font-gh3sp {
+  font-family: 'Orbitron', sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: "Inter", sans-serif;
+  background-color: #000;
+  color: white;
+  overflow: hidden;
+}
+
+@keyframes close-window {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+@keyframes minimize-window {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(50px);
+  }
+}
+
+.animate-close-window {
+  animation: close-window 150ms forwards ease-in-out;
+}
+
+.animate-minimize-window {
+  animation: minimize-window 150ms forwards ease-in-out;
+}
+
+.custom-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  scrollbar-gutter: stable; 
+}
+
+.custom-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05); /* semi-trasparente */
+  backdrop-filter: blur(8px);
+  border-radius: 9999px;
+  scrollbar-gutter: stable; 
+}
+
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2); /* glass effect */
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(12px);
+  transition: background 0.3s;
+  scrollbar-gutter: stable; 
+}
+
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+  scrollbar-gutter: stable; 
+}
+
+/* Firefox */
+.custom-scroll {
+  scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.05);
+  scrollbar-width: thin;
+  scrollbar-gutter: stable; 
+}
