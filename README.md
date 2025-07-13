@@ -1,69 +1,73 @@
-# React + TypeScript + Vite
+# 🌐 Gh3spOS
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Gh3spOS** è un sistema operativo **web-based** creato con **React**, che simula un ambiente desktop moderno, dinamico e minimale.  
+Pensato per sviluppatori, makers e appassionati di UI, offre un'esperienza fluida, con finestre, dock, animazioni e app personalizzate — tutto **direttamente nel browser**.
 
-Currently, two official plugins are available:
+![Gh3spOS Preview](preview.png)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## Expanding the ESLint configuration
+## ✨ Funzionalità principali
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- 🪟 **Gestione finestre stile OS**  
+  Drag & drop fluido, ridimensionamento, chiusura/apertura, stile vetro liquido (glass UI).
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- 🧭 **Dock interattivo**  
+  Barra inferiore con icone app, animazioni e apertura/chiusura finestre in stile sistema operativo.
 
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
+- 🗂️ **File Manager simulato**  
+  Esplora cartelle e file fittizi, utile per test e simulazioni all’interno dell’ambiente web.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- ⚙️ **App interne modulari**  
+  Include app come notepad, impostazioni, preview file e altro. Tutto integrato con gestione finestre.
+
+- 🎨 **UI animata con Framer Motion**  
+  Transizioni fluide, effetti "blur" e interfaccia responsive con supporto a modalità chiara e scura (in sviluppo).
+
+- 🧠 **Stato gestito localmente (niente Redux)**  
+  Stato locale all'interno di ogni app per massima semplicità di sviluppo.
+
+---
+
+## 🛠️ Tecnologie usate
+
+- [React](https://react.dev/)
+- [TailwindCSS](https://tailwindcss.com/)
+- [Framer Motion](https://www.framer.com/motion/)
+- [React Router](https://reactrouter.com/) *(in integrazione)*
+- [Lucide Icons](https://lucide.dev/)
+
+---
+
+## 🚧 Roadmap (prossime feature)
+
+- 🌈 Temi personalizzati (dark/light + editor tema)
+- 🔌 App Store interno per installare nuove app
+- 💾 File system virtuale con persistenza (IndexedDB)
+- 👨‍💻 Terminale interattivo con comandi Gh3sp
+- 🔐 Sistema di login per utenti multipli
+
+---
+
+## ▶️ Come eseguire in locale
+
+```bash
+git clone https://github.com/FabrizioGasparini/gh3spos.git
+cd gh3spos
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+> Requisiti: **Node.js 18+**, **npm** o **pnpm**
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+---
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## 📄 Licenza
+
+Distribuito con licenza **MIT**.  
+Vedi il file `LICENSE` per maggiori dettagli.
+
+---
+
+> _Gh3spOS: più che un sistema operativo, un laboratorio creativo dentro il browser._  
+> **Creato con 💙 da Fabri**
