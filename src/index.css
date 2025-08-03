@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap');
 @import "tailwindcss";
 @tailwind utilities;
 
@@ -9,11 +10,13 @@
 body {
   margin: 0;
   padding: 0;
-  font-family: "Inter", sans-serif;
+  font-family: "Lexend";
+  font-optical-sizing: auto;
   background-color: #000;
   color: white;
   overflow: hidden;
 }
+
 
 @keyframes close-window {
   0% {
@@ -71,10 +74,24 @@ body {
   background: rgba(255, 255, 255, 0.35);
   scrollbar-gutter: stable; 
 }
-
-/* Firefox */
 .custom-scroll {
   scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.05);
   scrollbar-width: thin;
   scrollbar-gutter: stable; 
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

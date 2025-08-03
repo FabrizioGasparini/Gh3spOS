@@ -3,11 +3,10 @@ import { Desktop } from './layouts/desktop'
 import { WallpaperProvider } from './providers/wallpaper'
 import { NotFound } from './routes/not-found'
 import { Settings } from './routes/settings'
-import { Login } from './routes/login'
 
 export const router = createBrowserRouter([
 	{
-		path: '/',
+		path: '/*',
 		element: (
 			<WallpaperProvider>
 				<Desktop />
@@ -20,10 +19,6 @@ export const router = createBrowserRouter([
 				element: <Settings />,
 			},
 		],
-	},
-	{
-		path: '/login',
-		element: <Login />,
 	},
 	{
 		path: '*',

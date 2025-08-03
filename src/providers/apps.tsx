@@ -1,6 +1,6 @@
 // src/providers/apps.tsx
 import { createContext, useContext } from 'react'
-import { apps } from '@/apps/apps'
+import { apps } from '@/apps/definitions'
 
 const AppsContext = createContext(apps)
 

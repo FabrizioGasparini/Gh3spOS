@@ -4,7 +4,7 @@ export const useSSH = (onOutput: (data: string) => void, onStatus: (status: stri
     const socketRef = useRef<WebSocket | null>(null);
 
     const connect = ({ host, port, username, password }: { host: string; port?: number; username: string; password: string }) => {
-        socketRef.current = new WebSocket("ws://localhost:8080");
+        socketRef.current = new WebSocket("ws://localhost:3001");
 
         socketRef.current.onopen = () => {
             socketRef.current?.send(
@@ -19,9 +19,15 @@ export const useSSH = (onOutput: (data: string) => void, onStatus: (status: stri
         };
 
         socketRef.current.onmessage = (msg) => {
-            const data = JSON.parse(msg.data);
-            if (data.type === "output") onOutput(data.data);
-            if (data.type === "status") onStatus(data.message);
+            try {
+                const data = JSON.parse(msg.data);
+                if (data.type === "output") onOutput(data.data);
+                else if (data.type === "status") onStatus(data.message);
+            } catch (err) {
+                // Se non è JSON, probabilmente è output raw del terminale: lo stampiamo lo stesso
+                console.error(err);
+                onOutput(msg.data);
+            }
         };
     };
 

@@ -3,26 +3,24 @@ import { useWallpaper } from "@/providers/wallpaper";
 import { useWindowManager } from "@/providers/window-manager";
 import { useEffect } from "react";
 import { WindowManager } from "@/modules/window/window-manager"
-import WallpaperHeader from "@/components/wallpaper-header"
-import { apps } from "@/apps/apps";
+import Wallpaper from "@/components/wallpaper/wallpaper"
+import { apps } from "@/apps/definitions";
+import { WidgetLayer } from "@/modules/widgets/widget-layer";
 
 const Desktop = () => {
   const { wallpaper } = useWallpaper();
   const { openWindow } = useWindowManager()
   
   useEffect(() => {
-    const id = "file-explorer"
-    openWindow(apps.get(id)!, id)
+    openWindow(apps.get("file-explorer")!, "file-explorer")
   }, [])
 
   return (
-    <div className="w-screen h-screen relative bg-cover"
-      style={{
-        backgroundImage: `url(${wallpaper})`
-      }}
-    >
-      <WallpaperHeader />
+    <div className="w-screen h-screen relative bg-cover bg-transparent">
+      <Wallpaper image={wallpaper} />
+      {/* <WallpaperHeader /> */}
       <WindowManager />
+      <WidgetLayer />
       <Dock />
     </div>
   );

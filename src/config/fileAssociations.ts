@@ -1,5 +1,5 @@
 export const fileAssociations: Record<string, string> = {
-    ".txt": "gh3preview",
+    ".txt": "notepad",
     ".md": "gh3preview",
     ".pdf": "gh3preview",
     ".webp": "gh3preview",

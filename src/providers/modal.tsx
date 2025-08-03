@@ -8,6 +8,7 @@ interface ModalData {
   type: ModalType
   title?: string
   message?: string
+  size?: { width: number; height: number }
   defaultValue?: string
   customContent?: ReactElement
   confirmLabel?: string
@@ -48,8 +49,8 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
     <ModalContext.Provider value={{ showModal, hideModal }}>
       {children}
       {modal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[999]">
-          <div className="bg-white/10 border border-white/30 backdrop-blur-md p-6 rounded-xl w-full max-w-md shadow-xl">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[999] w-full h-full">
+          <div className={`bg-white/10 border border-white/30 backdrop-blur-md p-6 rounded-xl max-w-11/12 max-h-11/12 overflow-y-auto shadow-xl custom-scroll`} style={{ width: modal.size?.width + "%" || '30%', height: modal.size?.height + "%" || '40%' }}>
             {modal.title && <h2 className="text-lg font-semibold text-white mb-4">{modal.title}</h2>}
 
             {modal.type === 'confirm' && (
@@ -68,8 +69,9 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
               </>
             )}
 
-            {modal.type === 'custom' && modal.customContent}
 
+            
+              {modal.type === 'custom' && modal.customContent }
             <div className="flex justify-end gap-3 mt-4">
               <button
                 className="px-4 py-1 rounded bg-white/20 hover:bg-white/30 text-white"

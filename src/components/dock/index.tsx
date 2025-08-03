@@ -1,5 +1,5 @@
 import { useWindowManager } from '@/providers/window-manager'
-import { apps } from '@/apps/apps'
+import { apps } from '@/apps/definitions'
 import type { AppDefinition } from '@/types'
 import { nanoid } from 'nanoid'
 import { useState, useRef, useEffect } from 'react'
@@ -31,6 +31,7 @@ export const Dock = () => {
 	const extraWindows: Map<string, AppDefinition> = new Map(
 		windows
 			.filter(win => ![...apps.entries()].some(([id, app]) => id === win.appId && app.isPinned))
+			.filter(win => !win.ghost)
 			.map(win => [
 				win.appId,
 				{
@@ -39,12 +40,14 @@ export const Dock = () => {
 					icon: win.icon || "default-icon.svg",
 					component: win.component,
 					isPinned: false,
+					ghost: win.ghost,
+					defaultSize: win.size,
 				} as AppDefinition
 			])
 	)
 
 	const dockApps: [string, AppDefinition][] = [
-		...[...apps.entries()].filter(([_, app]) => app.isPinned),
+		...[...apps.entries()].filter(([_, app]) => app.isPinned && !app.ghost),
 		...[...extraWindows.entries()]
 	]
 
@@ -68,10 +71,9 @@ export const Dock = () => {
 		<div
 			className="
 			fixed bottom-6 left-1/2 -translate-x-1/2
-			bg-white/20 dark:bg-gray-900/30 
-			backdrop-blur-lg border border-white/20
+			bg-white/10 backdrop-blur-sm border border-white/10
 			rounded-2xl px-6 py-3 flex gap-6
-			shadow-[0_8px_32px_rgba(31,38,135,0.37)] dark:shadow-[0_8px_32px_rgba(10,10,10,0.7)]
+			shadow-2xl
 			z-50
 			"
 			style={{ display: windows.filter((w) => w.isMaximized).length > 0 ? 'none' : 'flex' }}

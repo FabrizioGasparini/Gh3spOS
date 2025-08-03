@@ -36,7 +36,7 @@ export const Gh3Preview: React.FC<Gh3PreviewProps> = ({ fileContent, fileExtensi
                 <div className="w-full flex justify-center max-w-screen">
                     <img
                         src={`${fileContent}`}
-                        className=" custom-scroll max-w-screen h-full max-h-screen w-auto font-mono whitespace-pre-wrap p-2.5"
+                        className=" custom-scroll max-w-screen w-full max-h-screen h-auto font-mono whitespace-pre-wrap p-2.5 rounded-3xl"
                         onLoad={(e) => { resizeWindow(windowId, { width: pxToPercent(e.currentTarget.offsetWidth, 'x'), height: pxToPercent(e.currentTarget.offsetHeight + 44, 'y') }, true); moveWindow(windowId, {x: 50 - pxToPercent(e.currentTarget.offsetWidth, 'x') / 2, y:50 - (pxToPercent(e.currentTarget.offsetHeight + 44, 'y')) / 2}) }}   
                     />
                 </div>

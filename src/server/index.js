@@ -5,6 +5,8 @@ import path from 'path'
 import bodyParser from 'body-parser'
 import drivelist from 'drivelist'
 import mime from 'mime-types';
+import WebSocket, { WebSocketServer } from "ws";
+import { Client } from "ssh2";
 
 const app = express()
 const PORT = 3001
@@ -12,6 +14,7 @@ const PORT = 3001
 app.use(cors())
 app.use(bodyParser.json())
 
+// FILE MANAGER
 const baseDir = "C:"
 
 // 🔍 Endpoint per leggere il contenuto di una cartella (con info avanzate)
@@ -195,6 +198,55 @@ app.get('/read', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`📂 File Manager backend attivo su http://localhost:${PORT}`)
 })
+
+
+// WEB SOCKET
+const wss = new WebSocketServer({ server });
+
+wss.on("connection", (ws) => {
+  const ssh = new Client();
+
+  ssh
+    .on("ready", () => {
+      console.log("✅ Connessione SSH riuscita");
+
+      ssh.shell((err, stream) => {
+        if (err) return ws.send(`Errore: ${err.message}`);
+
+        // Dati da SSH → WebSocket
+        stream.on("data", (data) => {
+          ws.send(JSON.stringify({ type: "output", data: data.toString() }));
+        });
+
+        // Dati da WebSocket → SSH
+        ws.on("message", (msg) => {
+          try {
+            const parsed = JSON.parse(msg.toString());
+            if (parsed.type === "input") {
+              stream.write(parsed.data); // Scrive solo il carattere
+            }
+          } catch (err) {
+            console.error("❌ Errore parsing input:", err);
+          }
+        });
+      });
+    })
+    .on("close", () => {
+      console.log("❌ Connessione SSH chiusa");
+      ws.close();
+    })
+    .on("error", (err) => {
+      console.error("❗ Errore SSH:", err.message);
+      ws.send(`Errore: ${err.message}`);
+      ws.close();
+    })
+    .connect({
+      host: "192.168.1.80",
+      port: 22,
+      username: "gaspa",
+      password: "2010081", 
+    });
+});
