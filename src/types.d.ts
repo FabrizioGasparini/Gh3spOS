@@ -6,6 +6,7 @@ export interface AppDefinition {
     defaultSize?: { width: number; height: number };
     optionalParams?: string[];
     ghost?: boolean;
+    singleInstance?: boolean;
 }
 
 export type WindowParamType = string | number | object | boolean | null;
@@ -13,7 +14,6 @@ export type WindowInstance = {
     id: string;
     appId: string;
     title: string;
-    component: ReactNode;
     params?: Record<string, WindowParamType>;
     isMinimized?: boolean;
     isMaximized?: boolean;
@@ -24,6 +24,8 @@ export type WindowInstance = {
     size: { width: number; height: number };
     sizeLocked: boolean;
     ghost?: boolean;
+    singleInstance?: boolean;
+    isSnapped: boolean;
 };
 
 export interface WidgetDefinition {
@@ -36,8 +38,8 @@ export interface WidgetDefinition {
 
 export interface WidgetInstance {
     id: string;
+    name: string;
     widgetId: string;
-    component: ReactNode;
     position: { x: number; y: number };
     size: { width: number; height: number };
     fixed?: boolean;

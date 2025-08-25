@@ -115,11 +115,10 @@ export const FilePicker: React.FC<FilePickerProps> = ({ onSelected, selectParams
 
   const updatePath = async () => {
     if (path === '/' && root === 'Drives') {
-        const drives = await fetchDrives();
+      const drives = await fetchDrives();
       setItems(drives.map((d) => ({ name: d.name, type: 'disk', diskLabel: d.label, diskType: d.type, size: d.size })));
-    } else {
-      await fetchData();
-    }
+    } else await fetchData();
+    
     setInputPath(path);
   }
 
@@ -445,7 +444,7 @@ export const FilePicker: React.FC<FilePickerProps> = ({ onSelected, selectParams
    const renderBreadcrumb = () => {
       const parts = path.split('/').filter(Boolean)
       return (
-        <div className="flex text-sm text-white/80 overflow-auto">
+        <div className="flex text-sm text-white/80 overflow-auto custom-scroll">
           <button  className={clsx(
                 'hover:underline px-1 rounded transition',
                 hoveredPath === root && 'bg-blue-500/30'

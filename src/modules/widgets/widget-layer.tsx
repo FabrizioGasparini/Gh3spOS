@@ -6,7 +6,7 @@ export const WidgetLayer = () => {
 
 	return (
     <div
-      className="absolute inset-0 pt-20 grid gap-6 p-6 -z-10"
+      className="absolute inset-0 pt-20 grid gap-6 p-6"
       style={{
         gridTemplateColumns: 'repeat(6, 1fr)',
         gridTemplateRows: 'repeat(9, 100px)',

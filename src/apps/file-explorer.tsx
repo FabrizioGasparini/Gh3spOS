@@ -5,8 +5,9 @@ import { useModal } from '@/providers/modal';
 import { apps } from "@/apps/definitions";
 import type { WindowInstance } from '@/types';
 import { percentToPx } from '@/utils/viewport';
-import { Folder, HardDrive, LayoutGrid, LayoutList } from 'lucide-react';
+import { FilePlus, Folder, FolderPlus, HardDrive, LayoutGrid, LayoutList, MoreHorizontal } from 'lucide-react';
 import clsx from 'clsx';
+import { usePersistentStore } from '@/providers/persistent-store';
 
 type FileItem = {
   name: string
@@ -40,6 +41,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedItem, setSelectedItem] = useState<FileItem | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; item: FileItem | null } | null>(null)
+  const [moreMenu, setMoreMenu] = useState<boolean>(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -53,9 +55,6 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
     size: 15,
   });
 
-  const [root, setRoot] = useState<string>('cloud.gh3sp.com');
-  const [path, setPath] = useState<string>('/');
-  const [inputPath, setInputPath] = useState(path)
   
   const [filter, setFilter] = useState<FilterState>({ label: "Tipo", value: true })
   const [largeView, setLargeView] = useState<boolean>(true)
@@ -63,8 +62,12 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
   const [draggedItem, setDraggedItem] = useState<FileItem | null>(null)
   const [hoveredPath, setHoveredPath] = useState<string | null>(null)
 
-  const [tabs, setTabs] = useState<{ root: string; path: string }[]>([{ root: 'cloud.gh3sp.com', path: '/' }]);
-  const [activeTab, setActiveTab] = useState(0)
+  const [tabs, setTabs] = usePersistentStore<{ root: string; path: string }[]>("file-explorer:tabs",[{ root: 'cloud.gh3sp.com', path: '/' }]);
+  const [activeTab, setActiveTab] = usePersistentStore("file-explorer:activeTab", 0)
+
+  const [root, setRoot] = useState<string>(tabs[activeTab].root);
+  const [path, setPath] = useState<string>(tabs[activeTab].path);
+  const [inputPath, setInputPath] = useState(path)
 
   const [draggedTabIndex, setDraggedTabIndex] = useState<number | null>(null)
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null)  
@@ -80,6 +83,10 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
   useEffect(() => {
     fetchDrives()
   }, [])
+
+  useEffect(() => {
+    console.log("Tabs Updated")
+  }, [tabs])
 
   useEffect(() => {
     updatePath()
@@ -161,7 +168,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
 
   // ===== File Functions ===== \\
   const openFile = async (file: FileItem) => {
-    const filePath = path.replace("cloud.gh3sp.com", "") + "/" + file.name;
+    const filePath = path + "/" + file.name;
     const parts = file.name.split(".");
     const extension = parts.length > 1 ? parts.pop()?.toLowerCase() : "";
     const appId: string = fileAssociations["." + extension];
@@ -176,21 +183,30 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
       const response = await fetch(`${BASE_URL}/read.php?path=${encodeURIComponent(filePath)}`);
       if (!response.ok) throw new Error("Errore nella lettura del file");
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        data = {mime: response.headers.get("Content-Type"), url: response.url}
+      }
+
+      console.log(data)
 
       switch (appId) {
         case "gh3preview":
           app.name = file.name + " - Preview";
           openWindow(app, appId, {
-            fileContent: data.content,
+            fileContent: data.url,
             fileExtension: extension ?? "txt",
           });
           break;
         
         case "notepad":
-          app.name = file.name + " - NotePad";
-          openWindow(app, appId, { fileContent: data.content, fileName: file.name, filePath: filePath });
-          break;
+          {
+            app.name = file.name + " - NotePad";
+            openWindow(app, appId, { fileContent: data.content, fileName: file.name, filePath: filePath });
+            break;
+          }
         
         
         default:
@@ -226,8 +242,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
       onConfirm: async (newName?: string) => {
         if (!newName || newName === item.name) return;
         try {
-          const oldPath = `${path.replace("cloud.gh3sp.com", "")}/${item.name}`;
-          const newPath = `${path.replace("cloud.gh3sp.com", "")}/${newName}`;
+          const oldPath = `${path}/${item.name}`;
+          const newPath = `${path}/${newName}`;
           const res = await fetch(`${BASE_URL}/rename.php`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -244,21 +260,26 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
   }
   
   const handleDelete = async (item: FileItem) => {
-    const confirmDelete = confirm(`Eliminare "${item.name}"?`);
-    if (!confirmDelete) return;
-    try {
-      const targetPath = `${path.replace("cloud.gh3sp.com", "")}/${item.name}`;
-      const res = await fetch(`${BASE_URL}/deleteFile.php`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: targetPath }),
-      });
-      if (!res.ok) throw new Error("Eliminazione fallita");
-      showToast(`Eliminato ${item.name}`);
-      updatePath();
-    } catch (err) {
-      showToast(`Errore: ${(err as Error).message}`);
-    }
+    showModal({
+      type: "confirm",
+      title: "Elimina file",
+      message: `Sei sicuro di voler eliminare ${item.name}?`,
+      onConfirm: async () => {
+        try {
+          const targetPath = `${path}/${item.name}`;
+          const res = await fetch(`${BASE_URL}/deleteFile.php`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path: targetPath }),
+          });
+          if (!res.ok) throw new Error("Eliminazione fallita");
+          showToast(`Eliminato ${item.name}`);
+          updatePath();
+        } catch (err) {
+          showToast(`Errore: ${(err as Error).message}`);
+        }
+      },
+    });    
   }
   
   const handleCopy = async (item: FileItem) => {
@@ -298,6 +319,54 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
       showToast(`Errore: ${(err as Error).message}`)
     }
   }
+
+  const handleCreateFolder = async () => {
+  showModal({
+    type: "confirm",
+    title: "Crea nuova cartella",
+    defaultValue: "Nuova Cartella",
+    onConfirm: async (folderName?: string) => {
+      if (!folderName) return;
+      try {
+        const newFolderPath = `${path}/${folderName}`;
+        const res = await fetch(`${BASE_URL}/createFolder.php`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: newFolderPath }),
+        });
+        if (!res.ok) throw new Error("Creazione cartella fallita");
+        showToast(`Cartella "${folderName}" creata`);
+        updatePath();
+      } catch (err) {
+        showToast(`Errore: ${(err as Error).message}`);
+      }
+    }
+  });
+};
+
+const handleCreateFile = async () => {
+  showModal({
+    type: "confirm",
+    title: "Crea nuovo file",
+    defaultValue: "nuovo_file.txt",
+    onConfirm: async (fileName?: string) => {
+      if (!fileName) return;
+      try {
+        const newFilePath = `${path}/${fileName}`;
+        const res = await fetch(`${BASE_URL}/createFile.php`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: newFilePath }),
+        });
+        if (!res.ok) throw new Error("Creazione file fallita");
+        showToast(`File "${fileName}" creato`);
+        updatePath();
+      } catch (err) {
+        showToast(`Errore: ${(err as Error).message}`);
+      }
+    }
+  });
+};
   
   const handleProperties = async (item: FileItem) => {
     showModal({
@@ -518,7 +587,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
   const renderBreadcrumb = () => {
     const parts = path.split('/').filter(Boolean)
     return (
-      <div className="flex text-sm text-white/80 overflow-auto">
+      <div className="flex text-sm text-white/80 overflow-auto custom-scroll text-nowrap">
         <button  className={clsx(
               'hover:underline px-1 rounded transition',
               hoveredPath === root && 'bg-blue-500/30'
@@ -530,40 +599,40 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
           return (
             <>
             <button
-            key={i}
-            onClick={() => updateTabPath(activeTab, root, "/" + subPath)}
-            onDragOver={(e) => {
-              e.preventDefault()
-              setHoveredPath(subPath)
-            }}
-            onDragLeave={() => setHoveredPath(null)}
-            onDrop={async () => {
-              if (!draggedItem) return
-          
-              const sourcePath = `${path}/${draggedItem.name}`
-              const destinationPath = `${subPath}/${draggedItem.name}`
-          
-              try {
-                const res = await fetch("http://localhost:3001/move", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ sourcePath, destinationPath })
-                })
-                if (!res.ok) throw new Error("Errore nel trascinamento")
-                showToast(`Spostato ${draggedItem.name} in ${destinationPath}`)
-                updatePath()
-                setHoveredPath(null)
-              } catch (err) {
-                showToast(`Errore: ${(err as Error).message}`)
-              } finally {
-                setDraggedItem(null)
-              }
-            }}
-            className={clsx(
-              'hover:underline px-1 rounded transition',
-              hoveredPath === subPath && 'bg-blue-500/30'
-            )}
-          >
+                key={i}    
+                onClick={() => updateTabPath(activeTab, root, "/" + subPath)}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  setHoveredPath(subPath)
+                }}
+                onDragLeave={() => setHoveredPath(null)}
+                onDrop={async () => {
+                  if (!draggedItem) return
+              
+                  const sourcePath = `${path}/${draggedItem.name}`
+                  const destinationPath = `${subPath}/${draggedItem.name}`
+              
+                  try {
+                    const res = await fetch("http://localhost:3001/move", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ sourcePath, destinationPath })
+                    })
+                    if (!res.ok) throw new Error("Errore nel trascinamento")
+                    showToast(`Spostato ${draggedItem.name} in ${destinationPath}`)
+                    updatePath()
+                    setHoveredPath(null)
+                  } catch (err) {
+                    showToast(`Errore: ${(err as Error).message}`)
+                  } finally {
+                    setDraggedItem(null)
+                  }
+                }}
+                className={clsx(
+                  'hover:underline px-1 rounded transition',
+                  hoveredPath === subPath && 'bg-blue-500/30'
+                )}
+              >
               {i === 0 && path.includes(':') ? `${part}` : part}
             </button>
             {i < parts.length - 1 && <span className="mx-1">/</span>}
@@ -618,7 +687,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
                     onClick={() => changeTab(i)}
                     className={clsx(
                       "group relative px-4 py-1 flex items-center gap-2 transition-all duration-200 cursor-pointer",
-                      "rounded-lg font-medium backdrop-blur-md select-none",
+                      "rounded-xl font-medium backdrop-blur-md select-none",
                       isActive
                         ? "bg-gradient-to-br from-blue-600/30 to-purple-600/30 text-white shadow-md scale-100"
                         : "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white scale-95",
@@ -666,7 +735,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
 
           {/* Bottone "+" */}
           <button
-            className="absolute right-2 h-3/4 aspect-square text-white/80 hover:text-white bg-white/15 hover:bg-white/20 rounded-3xl shadow backdrop-blur transition"
+            className="absolute right-2 h-3/4 aspect-square text-white/80 hover:text-white bg-white/15 hover:bg-white/20 rounded-full shadow backdrop-blur transition"
             onClick={() => { openNewTab(defaultDrive)}}
           >
             ＋
@@ -675,7 +744,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
       </div>
       <div className="flex w-full gap-2">
         <button
-          className="h-full w-auto aspect-square text-white/80 hover:text-white bg-white/15 hover:bg-white/20 rounded-3xl shadow backdrop-blur transition flex items-center justify-center"
+          className="h-full w-auto aspect-square text-white/80 hover:text-white bg-white/15 hover:bg-white/20 rounded-full shadow backdrop-blur transition flex items-center justify-center"
           onClick={() => { updateTabPath(activeTab, "Drives", "/")}}
         >
           <HardDrive size={18} />
@@ -705,9 +774,19 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
               placeholder="Cerca..."
               value={ searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-white/10 px-3 py-1 rounded-md text-sm text-white/80 focus:outline-none"
+              className="bg-white/10 px-3 py-1 rounded-full text-sm text-white/80 focus:outline-none border border-white/20"
             />
-            <button className='bg-white/10 px-1 py-1 rounded-md' onClick={() => setLargeView(!largeView)}>{largeView ? <LayoutList /> : <LayoutGrid /> }</button>
+              {
+                moreMenu && (
+                  <>
+                    <button className='bg-white/10 w-7 h-7 flex items-center justify-center px-1 py-1 rounded-full border border-white/20' onClick={handleCreateFolder}><FolderPlus className='w-4 h-4'/></button>
+                    <button className='bg-white/10 w-7 h-7 flex items-center justify-center px-1 py-1 rounded-full border border-white/20' onClick={handleCreateFile}><FilePlus className='w-4 h-4'/></button>
+                  </>
+                )
+              }
+            <button className='bg-white/10 w-7 h-7 flex items-center justify-center px-1 py-1 rounded-full border border-white/20' onClick={() => setMoreMenu(!moreMenu)}><MoreHorizontal className='w-4 h-4' />
+            </button>
+            <button className='bg-white/10 w-7 h-7 flex items-center justify-center px-1 py-1 rounded-full border border-white/20' onClick={() => setLargeView(!largeView)}>{largeView ? <LayoutList className='w-4 h-4' /> : <LayoutGrid  className='w-4 h-4'/> }</button>
           </div>
         </div>
 
@@ -750,7 +829,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
         ? <div
           key={item.name}
           className={clsx(
-            `${item.type == "disk" ? "flex-1 min-w-40" : "w-35"} p-2 rounded-lg cursor-pointer select-none flex flex-col items-center justify-start hover:bg-white/10 transition-all duration-150 relative ${selectedItem?.name === item.name ? "bg-white/20 hover:bg-white/25" : ""}`,
+            `${item.type == "disk" ? "flex-1 min-w-40" : "w-30"} p-2 rounded-lg cursor-pointer select-none flex flex-col items-center justify-start hover:bg-white/10 transition-all duration-150 relative ${selectedItem?.name === item.name ? "bg-white/20 hover:bg-white/25" : ""}`,
             hoveredPath === `${path}/${item.name}` && 'bg-blue-500/20 border border-blue-400'
           )}
           onClick={() => handleItemClick(item)}

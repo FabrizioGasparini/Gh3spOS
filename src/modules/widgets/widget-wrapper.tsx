@@ -1,9 +1,11 @@
 import type { WidgetInstance } from '@/types'
 import { useWidgetManager } from '@/providers/widget-manager'
+import React from 'react';
 
 export const WidgetWrapper = ({ widget }: { widget: WidgetInstance }) => {
-	const { removeWidget } = useWidgetManager()
+	const { removeWidget, getWidgetComponent } = useWidgetManager()
 
+	const WidgetComponent = React.createElement(getWidgetComponent(widget.id)!);
 	return (
 		<div className="rounded-xl border border-white/20 shadow-xl backdrop-blur-md bg-white/10 overflow-hidden relative w-full h-full group">
 			{/* Bottone chiusura */}
@@ -16,7 +18,7 @@ export const WidgetWrapper = ({ widget }: { widget: WidgetInstance }) => {
 
 			{/* Contenuto widget */}
 			<div className="w-full h-full p-4 text-white text-sm select-none">
-				<widget.component />
+				{WidgetComponent}
 			</div>
 		</div>
 	)

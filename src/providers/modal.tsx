@@ -2,7 +2,7 @@ import { createContext, useContext, useState } from 'react'
 import type { ReactNode, ReactElement } from 'react'
 
 // Tipi per il contesto
-export type ModalType = 'confirm' | 'custom'
+export type ModalType = 'confirm' | 'custom' | 'error'
 
 interface ModalData {
   type: ModalType
@@ -61,6 +61,22 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
                     type="text"
                     defaultValue={modal.defaultValue}
                     className="w-full p-2 rounded bg-white/10 text-white placeholder-white/40 outline-none border border-white/20 mb-4"
+                    onKeyDown={(e) => e.key === 'Enter' && handleConfirm()}
+                    autoFocus
+                    id='modalInput'
+                  />
+                )}
+              </>
+            )}
+            
+            {modal.type === 'error' && (
+              <>
+                {modal.message && <p className="text-red text-sm mb-4">{modal.message}</p>}
+                {modal.defaultValue !== undefined && (
+                  <input
+                    type="text"
+                    defaultValue={modal.defaultValue}
+                    className="w-full p-2 rounded bg-white/10 text-red placeholder-white/40 outline-none border border-white/20 mb-4"
                     onKeyDown={(e) => e.key === 'Enter' && handleConfirm()}
                     autoFocus
                     id='modalInput'

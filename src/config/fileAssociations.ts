@@ -1,10 +1,9 @@
 export const fileAssociations: Record<string, string> = {
     ".txt": "notepad",
-    ".md": "gh3preview",
+    ".md": "notepad",
+    ".json": "notepad",
     ".pdf": "gh3preview",
     ".webp": "gh3preview",
-    //".gh3": "Gh3IDE",
-    ".json": "gh3preview",
     ".png": "gh3preview",
     ".jpg": "gh3preview",
     ".jpeg": "gh3preview",

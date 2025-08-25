@@ -15,7 +15,7 @@ export const WidgetPreviewCard = ({
     <div className="bg-black/15 backdrop-blur-lg border border-black/10 rounded-xl p-4 shadow hover:scale-[1.02] transition-all flex-1 min-w-2xs flex flex-col gap-3">
         
         <div
-        className="relative w-full aspect-square rounded-lg overflow-hidden  shadow-lg"
+        className="relative w-full aspect-square rounded-lg overflow-hidden shadow-lg"
         style={{
           backgroundImage: `url(${wallpaper})`,
           backgroundSize: 'cover',

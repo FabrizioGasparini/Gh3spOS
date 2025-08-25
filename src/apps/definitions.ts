@@ -1,5 +1,4 @@
-import React from "react";
-import { Settings } from "@/routes/settings";
+import { Settings } from "@/apps/settings/index";
 import type { AppDefinition } from "@/types";
 
 import { NotePad } from "@/apps/notepad";
@@ -7,7 +6,9 @@ import { Gh3Preview } from "@/apps/gh3preview";
 import { FileExplorer } from "@/apps/file-explorer";
 import { WidgetStore } from "@/apps/widget-store";
 import { TestApp } from "@/apps/test-app";
-import { Terminal } from "@/apps/terminal";
+import { Terminal } from "@/apps/terminal/index";
+import { TaskManager } from "@/apps/task-manager";
+import { BrowserApp } from "@/apps/browser";
 //import { SSHConnect } from "@/apps/ssh-connect"
 
 export const apps: Map<string, AppDefinition> = new Map<string, AppDefinition>([
@@ -18,23 +19,14 @@ export const apps: Map<string, AppDefinition> = new Map<string, AppDefinition>([
             icon: "dock-settings.png",
             component: Settings,
             isPinned: true,
-        },
-    ],
-    [
-        "notes",
-        {
-            name: "Note",
-            icon: "default-icon.svg",
-            component: () => React.createElement("h1", null, "Notes"),
-            isPinned: false,
-            defaultSize: { width: 30, height: 40 },
+            singleInstance: true,
         },
     ],
     [
         "notepad",
         {
             name: "NotePad",
-            icon: "gh3-pad.png",
+            icon: "dock-notepad.png",
             component: NotePad,
             defaultSize: { width: 25, height: 60 },
             isPinned: true,
@@ -44,9 +36,10 @@ export const apps: Map<string, AppDefinition> = new Map<string, AppDefinition>([
         "gh3preview",
         {
             name: "Gh3Preview",
-            icon: "dock-preview.png",
+            icon: "preview.png",
             component: Gh3Preview,
             defaultSize: { width: 30, height: 40 },
+            ghost: false,
             isPinned: false,
         },
     ],
@@ -57,6 +50,7 @@ export const apps: Map<string, AppDefinition> = new Map<string, AppDefinition>([
             icon: "dock-files.png",
             component: FileExplorer,
             isPinned: true,
+            singleInstance: true,
         },
     ],
     [
@@ -66,16 +60,39 @@ export const apps: Map<string, AppDefinition> = new Map<string, AppDefinition>([
             icon: "dock-store.png",
             component: WidgetStore,
             isPinned: true,
+            singleInstance: true,
         },
     ],
     [
         "terminal",
         {
             name: "Terminal",
-            icon: "default-icon.svg",
+            icon: "dock-terminal.png",
             component: Terminal,
             isPinned: true,
             defaultSize: { width: 30, height: 40 },
+            singleInstance: true,
+        },
+    ],
+    [
+        "task-manager",
+        {
+            name: "Task Manager",
+            icon: "task-manager.png",
+            component: TaskManager,
+            defaultSize: { width: 30, height: 40 },
+            singleInstance: true,
+        },
+    ],
+    [
+        "browser",
+        {
+            name: "Browser",
+            icon: "task-manager.png",
+            isPinned: true,
+            singleInstance: false,
+            defaultSize: { width: 80, height: 80 }, // percentuali del tuo WM
+            component: BrowserApp,
         },
     ],
     [

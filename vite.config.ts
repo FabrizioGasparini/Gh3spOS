@@ -13,4 +13,12 @@ export default defineConfig({
     optimizeDeps: {
         exclude: ["html2canvas-pro"],
     },
+    server: {
+        hmr: {
+            overlay: true,
+        },
+        watch: {
+            ignored: ["**/node_modules/**"],
+        },
+    },
 });

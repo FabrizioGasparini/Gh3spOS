@@ -10,13 +10,15 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 
 type Gh3PreviewProps = {
     fileContent: string;
+    mime: string;
     fileExtension: "txt" | "md" | "log" | "png" | "jpg" | "jpeg" | "gif" | "pdf" | "mp4" | "webp";
     windowId: string;
 };
 
-export const Gh3Preview: React.FC<Gh3PreviewProps> = ({ fileContent, fileExtension, windowId }) => {
+export const Gh3Preview: React.FC<Gh3PreviewProps> = ({ fileContent, mime, fileExtension, windowId }) => {
     const { resizeWindow, moveWindow } = useWindowManager()
     
+
     switch (fileExtension) {
         case "txt":
         case "log":
@@ -43,7 +45,7 @@ export const Gh3Preview: React.FC<Gh3PreviewProps> = ({ fileContent, fileExtensi
             );
         case "mp4":
             return (
-                <div className="h-full flex justify-center max-h-screen">
+                <div className="h-11/12 flex justify-center max-h-full">
                     <video
                         controls
                         className="custom-scroll max-w-screen h-full max-h-screen w-auto font-mono whitespace-pre-wrap p-2.5"
