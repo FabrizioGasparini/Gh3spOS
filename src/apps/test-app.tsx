@@ -1,14 +1,13 @@
 import { FilePicker } from "@/components/file-picker";
-import type { FileItem } from "@/types";
 
 type Props = {
   windowId: string;
 };
 
-export const TestApp: React.FC<Props> = ({ windowId }) => {
+export const TestApp: React.FC<Props> = () => {
   return (
     <div className="w-full h-full p-3 text-white custom-scroll relative">
-        <FilePicker onSelected={(file: FileItem) => console.log(file)} windowId={windowId} selectParams={{ allow: "file", fileExtensions: ["log", "txt"]}} />
+        <FilePicker onSelected={(file, path) => console.log(file, path)} selectParams={{ allow: "file", fileExtensions: ["log", "txt"]}} />
     </div>
   );
 };

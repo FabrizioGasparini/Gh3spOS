@@ -120,6 +120,10 @@ export const NotePad = ({ windowId, filePath, fileContent, onSaveSuccess }: Prop
     }
   };
 
+  const activeContent = tabs[activeTab]?.content || "";
+  const words = activeContent.trim() ? activeContent.trim().split(/\s+/).length : 0;
+  const chars = activeContent.length;
+
   return (
     <div className="w-full h-full flex flex-col bg-black/10 rounded-lg overflow-hidden text-white shadow-xl relative">
       <div className="flex items-center gap-2 px-4 py-2 bg-black/20 border-b border-white/10 ">
@@ -154,6 +158,11 @@ export const NotePad = ({ windowId, filePath, fileContent, onSaveSuccess }: Prop
         placeholder="Scrivi qui il tuo testo..."
         spellCheck={false}
       />
+
+      <div className="px-3 py-1 text-xs text-white/60 bg-black/20 border-t border-white/10 flex items-center justify-between">
+        <span className="truncate max-w-[60%]">{tabs[activeTab]?.path || "File non salvato"}</span>
+        <span>{words} parole · {chars} caratteri</span>
+      </div>
 
       {toast && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 text-white px-4 py-2 rounded shadow-lg animate-fadeIn">

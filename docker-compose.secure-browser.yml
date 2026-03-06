@@ -1,0 +1,16 @@
+services:
+  secure-browser:
+    image: selenium/standalone-chromium:4.30.0
+    container_name: gh3spos-secure-browser
+    shm_size: 2gb
+    ports:
+      - "7900:7900"
+      - "4444:4444"
+    environment:
+      - SE_VNC_NO_PASSWORD=1
+      - SE_NODE_OVERRIDE_MAX_SESSIONS=true
+      - SE_NODE_MAX_SESSIONS=1
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: false

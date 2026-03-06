@@ -2,6 +2,7 @@ import Terminal from '@/components/terminal/index'
 import { useSSH } from '@/hooks/useSSH'
 import { useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
+import type { Terminal as XTerm } from 'xterm'
 
 type SSHLink = {
   id: string
@@ -24,7 +25,7 @@ function isJson(str: string) {
 export const SSHConnect = () => {
   const [links, setLinks] = useState<SSHLink[]>([])
   const [activeTab, setActiveTab] = useState<number>(0)
-  const terminalRefs = useRef<any[]>([])
+  const terminalRefs = useRef<Array<XTerm | null>>([])
 
   const { connect, sendCommand } = useSSH(
     (output) => terminalRefs.current[activeTab]?.write(isJson(output) ? JSON.parse(output).data : output),
@@ -65,7 +66,7 @@ export const SSHConnect = () => {
     if (activeTab === index) setActiveTab(0)
   }
 
-  const handleReady = (term: any, index: number) => {
+  const handleReady = (term: XTerm, index: number) => {
     terminalRefs.current[index] = term
     const link = links[index]
     if (link.host && link.username) {

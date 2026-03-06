@@ -10,6 +10,14 @@ export interface AppDefinition {
 }
 
 export type WindowParamType = string | number | object | boolean | null;
+
+export type SnapBounds = {
+    width: number;
+    height: number;
+    x: number;
+    y: number;
+};
+
 export type WindowInstance = {
     id: string;
     appId: string;
@@ -26,6 +34,7 @@ export type WindowInstance = {
     ghost?: boolean;
     singleInstance?: boolean;
     isSnapped: boolean;
+    snapBounds?: SnapBounds;
 };
 
 export interface WidgetDefinition {
@@ -60,3 +69,24 @@ export type DriveItem = {
     type: string;
     size: number;
 };
+
+interface BatteryManager extends EventTarget {
+    readonly charging: boolean;
+    readonly level: number;
+}
+
+declare global {
+    interface NetworkInformation extends EventTarget {
+        downlink?: number;
+        effectiveType?: string;
+    }
+
+    interface Navigator {
+        getBattery?: () => Promise<BatteryManager>;
+        deviceMemory?: number;
+        connection?: NetworkInformation;
+    }
+
+}
+
+declare module 'xterm/css/xterm.css'

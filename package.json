@@ -6,6 +6,12 @@
     "scripts": {
         "dev": "vite",
         "server": "node ./src/server/index.js",
+        "secure-browser:up": "docker compose -f docker-compose.secure-browser.yml up -d",
+        "secure-browser:down": "docker compose -f docker-compose.secure-browser.yml down",
+        "secure-browser:logs": "docker compose -f docker-compose.secure-browser.yml logs -f",
+        "apps:up": "docker compose -f docker-compose.apps.yml up -d",
+        "apps:down": "docker compose -f docker-compose.apps.yml down",
+        "apps:status": "node ./scripts/apps-status.mjs",
         "build": "tsc -b && vite build",
         "lint": "eslint .",
         "preview": "vite preview"

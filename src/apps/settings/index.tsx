@@ -1,4 +1,4 @@
-import { useState } from "react"
+import React, { useState } from "react"
 import { usePersistentStore } from "@/providers/persistent-store"
 
 const sections = [
@@ -8,7 +8,7 @@ const sections = [
   { id: "system", label: "Sistema" },
 ]
 
-export const Settings = ({windowId}: {windowId: string}) => {
+export const Settings: React.FC<{ windowId: string }> = () => {
   const [activeSection, setActiveSection] = useState("appearance")
   const [settings, setSettings] = usePersistentStore("gh3sp:settings", {
     theme: "dark",

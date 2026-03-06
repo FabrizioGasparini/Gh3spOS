@@ -1,4 +1,4 @@
-import { apps } from "@/apps/definitions";
+import { useApps } from "@/providers/apps";
 import { useSpotlight } from "@/providers/spotlight";
 import { useWindowManager } from "@/providers/window-manager";
 import { useEffect } from "react";
@@ -6,11 +6,12 @@ import { motion } from "framer-motion";
 
 export default function Spotlight() {
     const { isOpen, close, query, setQuery, toggle } = useSpotlight();
+    const { apps } = useApps()
     const { openWindow } = useWindowManager()
     
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.ctrlKey && e.code === "Space") {
+            if ((e.ctrlKey || e.metaKey) && e.code === "Space") {
                 e.preventDefault();
                 toggle();
             }
@@ -20,7 +21,7 @@ export default function Spotlight() {
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, []);
+    }, [close, toggle]);
 
     if (!isOpen) return null;
 

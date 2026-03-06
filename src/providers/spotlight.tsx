@@ -1,4 +1,5 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 
 type SpotlightContextType = {
     isOpen: boolean;
@@ -11,19 +12,21 @@ type SpotlightContextType = {
 
 const SpotlightContext = createContext<SpotlightContextType | undefined>(undefined);
 
-export function SpotlightProvider({ children }) {
+export function SpotlightProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
 
-  const open = () => setIsOpen(true);
-  const close = () => {
+  const open = useCallback(() => setIsOpen(true), []);
+  const close = useCallback(() => {
     setIsOpen(false);
     setQuery("");
-  };
-  const toggle = () => setIsOpen((prev) => !prev);
+  }, []);
+  const toggle = useCallback(() => setIsOpen((prev) => !prev), []);
+
+  const value = useMemo(() => ({ isOpen, open, close, toggle, query, setQuery }), [isOpen, open, close, toggle, query]);
 
   return (
-    <SpotlightContext.Provider value={{ isOpen, open, close, toggle, query, setQuery }}>
+    <SpotlightContext.Provider value={value}>
       {children}
     </SpotlightContext.Provider>
   );

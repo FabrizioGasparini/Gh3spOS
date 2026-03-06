@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>File Explorer Runtime</title>
+	<style>
+		html, body { margin: 0; width: 100%; height: 100%; background: #020617; color: #e2e8f0; font-family: Inter, Arial, sans-serif; }
+		iframe { width: 100%; height: 100%; border: 0; display: block; }
+		.msg { height: 100%; display: grid; place-items: center; text-align: center; padding: 24px; }
+	</style>
+</head>
+<body>
+	<div id="root" class="msg">Connecting runtime...</div>
+	<script>
+		(async () => {
+			const appId = 'file-explorer'
+			const token = 'gh3sp-runtime-v1'
+			const ports = [5173, 5174, 5175, 5176, 4173]
+			const root = document.getElementById('root')
+
+			for (const port of ports) {
+				const target = `http://localhost:${port}/runtime/${appId}?rt=${token}`
+				try {
+					await fetch(target, { method: 'GET', mode: 'no-cors', cache: 'no-store' })
+					const iframe = document.createElement('iframe')
+					iframe.title = 'File Explorer Runtime'
+					iframe.src = target
+					root.replaceWith(iframe)
+					return
+				} catch {}
+			}
+
+			root.textContent = 'Runtime frontend non raggiungibile. Avvia `npm run dev`.'
+		})()
+	</script>
+</body>
+</html>

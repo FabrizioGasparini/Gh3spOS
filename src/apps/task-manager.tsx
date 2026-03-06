@@ -1,14 +1,17 @@
 import { useWindowManager } from '@/providers/window-manager'
 import { useWidgetManager } from '@/providers/widget-manager'
-import { apps } from '@/apps/definitions'
+import { useApps } from '@/providers/apps'
 import { useState, useMemo } from 'react'
 
 export const TaskManager = () => {
+	const { apps } = useApps()
 	const { windows, closeWindow } = useWindowManager()
 	const { widgets, removeWidget } = useWidgetManager()
 
 	const [search, setSearch] = useState('')
 	const [selected, setSelected] = useState<Set<string>>(new Set())
+	const focusedWindow = windows.find(w => w.isFocused)
+	const snappedCount = windows.filter(w => w.isSnapped).length
 
 
 	// Raggruppa per appId
@@ -21,7 +24,7 @@ export const TaskManager = () => {
 			groups[win.appId].instances.push(win)
 		}
 		return groups
-	}, [windows])
+	}, [windows, apps])
 
 	// Filtra app e widget
 	const filteredGroups = useMemo(() => {
@@ -58,6 +61,25 @@ export const TaskManager = () => {
 	return (
 		<div className="h-full w-full p-4 bg-black/10 backdrop-blur-lg border border-white/20 rounded-2xl text-white text-sm flex flex-col gap-4 overflow-auto custom-scroll">
 			<h2 className="text-xl font-bold text-white">Task Manager</h2>
+
+			<div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+				<div className="bg-white/10 rounded-lg px-3 py-2">
+					<div className="text-white/50 text-xs uppercase">Finestre</div>
+					<div className="text-lg font-semibold">{windows.length}</div>
+				</div>
+				<div className="bg-white/10 rounded-lg px-3 py-2">
+					<div className="text-white/50 text-xs uppercase">Widgets</div>
+					<div className="text-lg font-semibold">{widgets.length}</div>
+				</div>
+				<div className="bg-white/10 rounded-lg px-3 py-2">
+					<div className="text-white/50 text-xs uppercase">Snapped</div>
+					<div className="text-lg font-semibold">{snappedCount}</div>
+				</div>
+				<div className="bg-white/10 rounded-lg px-3 py-2">
+					<div className="text-white/50 text-xs uppercase">In focus</div>
+					<div className="text-sm font-semibold truncate">{focusedWindow?.title ?? 'Nessuna'}</div>
+				</div>
+			</div>
 
 			{/* Ricerca */}
 			<input

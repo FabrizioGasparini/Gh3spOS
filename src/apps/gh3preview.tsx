@@ -15,7 +15,7 @@ type Gh3PreviewProps = {
     windowId: string;
 };
 
-export const Gh3Preview: React.FC<Gh3PreviewProps> = ({ fileContent, mime, fileExtension, windowId }) => {
+export const Gh3Preview: React.FC<Gh3PreviewProps> = ({ fileContent, fileExtension, windowId }) => {
     const { resizeWindow, moveWindow } = useWindowManager()
     
 

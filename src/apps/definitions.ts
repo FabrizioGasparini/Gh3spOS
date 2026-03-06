@@ -9,6 +9,7 @@ import { TestApp } from "@/apps/test-app";
 import { Terminal } from "@/apps/terminal/index";
 import { TaskManager } from "@/apps/task-manager";
 import { BrowserApp } from "@/apps/browser";
+import { AppStore } from "@/apps/app-store";
 //import { SSHConnect } from "@/apps/ssh-connect"
 
 export const apps: Map<string, AppDefinition> = new Map<string, AppDefinition>([
@@ -59,6 +60,16 @@ export const apps: Map<string, AppDefinition> = new Map<string, AppDefinition>([
             name: "Widget Store",
             icon: "dock-store.png",
             component: WidgetStore,
+            isPinned: true,
+            singleInstance: true,
+        },
+    ],
+    [
+        "app-store",
+        {
+            name: "App Store",
+            icon: "dock-store.png",
+            component: AppStore,
             isPinned: true,
             singleInstance: true,
         },

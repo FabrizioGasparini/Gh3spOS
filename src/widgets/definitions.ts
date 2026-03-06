@@ -8,6 +8,7 @@ import { SystemInfoWidget } from "./system-info";
 import { NotesWidget } from "./notes";
 import { BatteryWidget } from "./battery";
 import { NetworkWidget } from "./network";
+import { QuickActionsWidget } from "./quick-actions";
 
 export const widgets: Map<string, WidgetDefinition> = new Map<string, WidgetDefinition>([
     [
@@ -78,6 +79,16 @@ export const widgets: Map<string, WidgetDefinition> = new Map<string, WidgetDefi
             defaultSize: { width: 2, height: 1 },
             inStore: true,
             storeDescription: "Mostra stato della connessione e ping",
+        },
+    ],
+    [
+        "quick-actions",
+        {
+            name: "Quick Actions",
+            component: QuickActionsWidget,
+            defaultSize: { width: 3, height: 2 },
+            inStore: true,
+            storeDescription: "Apri app e controlla il sistema al volo",
         },
     ],
 ]);

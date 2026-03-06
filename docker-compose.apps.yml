@@ -1,0 +1,32 @@
+services:
+  app-notepad:
+    image: nginx:alpine
+    container_name: gh3spos-notepad
+    ports:
+      - '4101:80'
+    volumes:
+      - ./docker/notepad/index.html:/usr/share/nginx/html/index.html:ro
+
+  app-file-explorer:
+    image: nginx:alpine
+    container_name: gh3spos-file-explorer
+    ports:
+      - '4102:80'
+    volumes:
+      - ./docker/file-explorer/index.html:/usr/share/nginx/html/index.html:ro
+
+  app-terminal:
+    image: nginx:alpine
+    container_name: gh3spos-terminal
+    ports:
+      - '4103:80'
+    volumes:
+      - ./docker/terminal/index.html:/usr/share/nginx/html/index.html:ro
+
+  app-browser:
+    image: nginx:alpine
+    container_name: gh3spos-browser
+    ports:
+      - '4104:80'
+    volumes:
+      - ./docker/browser/index.html:/usr/share/nginx/html/index.html:ro

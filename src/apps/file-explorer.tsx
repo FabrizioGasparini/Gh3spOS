@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { fileAssociations } from "@/config/fileAssociations";
 import { useWindowManager } from '@/providers/window-manager';
 import { useModal } from '@/providers/modal';
-import { apps } from "@/apps/definitions";
+import { useApps } from '@/providers/apps';
 import type { WindowInstance } from '@/types';
 import { percentToPx } from '@/utils/viewport';
 import { FilePlus, Folder, FolderPlus, HardDrive, LayoutGrid, LayoutList, MoreHorizontal } from 'lucide-react';
@@ -37,6 +37,7 @@ type FileExplorerProps = {
 const BASE_URL = "https://www.gh3sp.com/cloud/api";
 
 export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
+  const { apps } = useApps()
   const [items, setItems] = useState<FileItem[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedItem, setSelectedItem] = useState<FileItem | null>(null)
@@ -645,7 +646,7 @@ const handleCreateFile = async () => {
   }
 
   return (
-    <div className="flex flex-col h-full gap-2 text-white">
+    <div className="flex flex-col h-full gap-2 mx-2 text-white">
       {/* Tabs */}
       <div className="relative w-full">
         <div className="relative flex items-center gap-2 px-2">

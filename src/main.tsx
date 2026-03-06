@@ -10,25 +10,37 @@ import { SpotlightProvider } from '@/providers/spotlight'
 import { PersistentStoreProvider } from '@/providers/persistent-store'
 import { WallpaperProvider } from '@/providers/wallpaper'
 import { ErrorBoundary } from '@/components/error-boundary'
+import { NotificationsProvider } from '@/providers/notifications'
+import { AuthProvider } from '@/providers/auth'
+import { EnsureLoggedIn } from '@/modules/auth/ensure-logged-in'
+import { EnsureUserExists } from '@/modules/auth/ensure-user-exists'
 
 init(
 	<ErrorBoundary>
 		<PersistentStoreProvider>
-			<WallpaperProvider>	
-				<ModalProvider>
-					<WindowManagerProvider>
-						<SpotlightProvider>
-							<PreviewRefsProvider>
-								<WidgetManagerProvider>
-									<AppsProvider>
-										<RouterProvider router={router} />
-									</AppsProvider>
-								</WidgetManagerProvider>
-							</PreviewRefsProvider>
-						</SpotlightProvider>
-					</WindowManagerProvider>
-				</ModalProvider>
-			</WallpaperProvider>
+			<AuthProvider>
+				<EnsureUserExists>
+					<EnsureLoggedIn>
+						<AppsProvider>
+							<WallpaperProvider>	
+								<NotificationsProvider>
+									<ModalProvider>
+										<WindowManagerProvider>
+											<SpotlightProvider>
+												<PreviewRefsProvider>
+													<WidgetManagerProvider>
+														<RouterProvider router={router} future={{ v7_startTransition: true }} />
+													</WidgetManagerProvider>
+												</PreviewRefsProvider>
+											</SpotlightProvider>
+										</WindowManagerProvider>
+									</ModalProvider>
+								</NotificationsProvider>
+							</WallpaperProvider>
+						</AppsProvider>
+					</EnsureLoggedIn>
+				</EnsureUserExists>
+			</AuthProvider>
 		</PersistentStoreProvider>
 	</ErrorBoundary>
 )

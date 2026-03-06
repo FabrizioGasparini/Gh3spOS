@@ -6,10 +6,10 @@ export const WidgetLayer = () => {
 
 	return (
     <div
-      className="absolute inset-0 pt-20 grid gap-6 p-6"
+      className="absolute inset-0 pt-12 pb-28 grid gap-4 p-4 pointer-events-none"
       style={{
         gridTemplateColumns: 'repeat(6, 1fr)',
-        gridTemplateRows: 'repeat(9, 100px)',
+        gridTemplateRows: 'repeat(9, minmax(90px, 1fr))',
         maxHeight: '100vh', // non va oltre la viewport
       }}
     >
@@ -25,7 +25,7 @@ export const WidgetLayer = () => {
               gridColumn: `span ${width}`,
               gridRow: `span ${height}`
             }}
-            className="bg-white/10 rounded-xl backdrop-blur-lg shadow-xl overflow-hidden"
+            className="pointer-events-auto bg-white/10 rounded-xl backdrop-blur-lg shadow-xl overflow-hidden"
           >
             <WidgetWrapper widget={w} />
           </div>

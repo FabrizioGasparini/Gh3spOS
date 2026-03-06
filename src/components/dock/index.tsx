@@ -1,16 +1,18 @@
 import { useWindowManager } from '@/providers/window-manager'
-import { apps } from '@/apps/definitions'
+import { useApps } from '@/providers/apps'
 import type { AppDefinition } from '@/types'
-import { nanoid } from 'nanoid'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { usePreviewRefs } from "@/providers/preview-refs"
 import html2canvas from 'html2canvas-pro'
 import { Minimize, X } from 'lucide-react'
 
 export const Dock = () => {
+  const { apps } = useApps()
   const { windows, openWindow, focusWindow, minimizeWindow, closeWindow } = useWindowManager()
   const [hoveredAppId, setHoveredAppId] = useState<string | null>(null)
-  const hoverTimeout = useRef<NodeJS.Timeout | null>(null)
+  const [dockMouseX, setDockMouseX] = useState<number | null>(null)
+  const [clickedAppId, setClickedAppId] = useState<string | null>(null)
+  const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [previews, setPreviews] = useState<Record<string, string>>({})
   const { getPreviewRef } = usePreviewRefs()
 
@@ -42,23 +44,35 @@ export const Dock = () => {
 	
 
   useEffect(() => {
-    if (hoveredAppId) {
-      const matching = windows.filter(w => w.appId === hoveredAppId)
-      matching.forEach(async win => {
-        const el = getPreviewRef(win.id)
-        if (el) {
-			const canvas = await html2canvas(el, {
-				backgroundColor: null,
-				removeContainer: true,
-				scale: 2, // Aumenta la risoluzione del preview
-		  	})
-          	setPreviews(prev => ({ ...prev, [win.id]: canvas.toDataURL() }))
-        }
-      })
-    }
-  }, [hoveredAppId])
+    if (!hoveredAppId) return
 
-  const extraWindows: Map<string, AppDefinition> = new Map(
+    let cancelled = false
+    const matching = windows.filter(w => w.appId === hoveredAppId && !w.isMinimized)
+
+    const buildPreviews = async () => {
+      for (const win of matching) {
+        if (cancelled || previews[win.id]) continue
+        const el = getPreviewRef(win.id)
+        if (!el) continue
+
+        const canvas = await html2canvas(el, {
+          backgroundColor: null,
+          removeContainer: true,
+          scale: 1,
+        })
+
+        if (cancelled) return
+        setPreviews(prev => ({ ...prev, [win.id]: canvas.toDataURL('image/webp', 0.72) }))
+      }
+    }
+
+    buildPreviews()
+    return () => {
+      cancelled = true
+    }
+  }, [hoveredAppId, windows, getPreviewRef, previews])
+
+  const extraWindows: Map<string, AppDefinition> = useMemo(() => new Map(
     windows
       .filter(win => ![...apps.entries()].some(([id, app]) => id === win.appId && app.isPinned))
       .filter(win => !win.ghost)
@@ -68,18 +82,18 @@ export const Dock = () => {
           id: win.id,
           name: win.title,
           icon: win.icon || "default-icon.svg",
-          component: win.component,
+          component: apps.get(win.appId)?.component ?? (() => null),
           isPinned: false,
           ghost: win.ghost,
           defaultSize: win.size,
         } as AppDefinition
       ])
-  )
+  ), [windows, apps])
 
-  const dockApps: [string, AppDefinition][] = [
-    ...[...apps.entries()].filter(([_, app]) => app.isPinned && !app.ghost),
+  const dockApps: [string, AppDefinition][] = useMemo(() => [
+    ...[...apps.entries()].filter((entry) => entry[1].isPinned && !entry[1].ghost),
     ...[...extraWindows.entries()]
-  ]
+  ], [extraWindows, apps])
 
   const handleClick = ([id, app]: [string, AppDefinition]) => {
     const matchingWindows = windows.filter(w => w.appId === id)
@@ -90,11 +104,8 @@ export const Dock = () => {
       return
     }
 
-    const isFocused = matchingWindows.filter((w) => w.isFocused).length > 0
-    matchingWindows.forEach((w) => {
-      if (isFocused) minimizeWindow(w.id)
-      else focusWindow(w.id, true)
-    })
+    const preferredWindow = matchingWindows.find((w) => !w.isMinimized) ?? matchingWindows[0]
+    focusWindow(preferredWindow.id, true)
   }
 
   // Funzione per aprire il context menu
@@ -120,6 +131,12 @@ export const Dock = () => {
 
   const closeContextMenu = () => setContextMenu(null)
 
+  const handleDockLeave = () => {
+    setDockMouseX(null)
+    if (hoverTimeout.current) clearTimeout(hoverTimeout.current)
+    hoverTimeout.current = setTimeout(() => setHoveredAppId(null), 120)
+  }
+
   // Azioni menu contestuale
   const handleContextMenuAction = (action: string, appId: string) => {
     const matchingWindows = windows.filter(w => w.appId === appId)
@@ -143,22 +160,21 @@ export const Dock = () => {
     <>
       {/* Dock normale */}
       <div
-        className={`
-          fixed bottom-6 left-1/2 -translate-x-1/2
-          bg-white/10 backdrop-blur-lg border border-white/20
-          rounded-2xl px-6 py-3 flex gap-6
-          shadow-2xl
-          z-50
-        `}
+        className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-[95] flex items-end gap-3 px-4 py-2 rounded-2xl border border-white/25 bg-white/12 backdrop-blur-2xl shadow-[0_15px_45px_rgba(0,0,0,0.5)] transition-all duration-200`}
         style={{ display: windows.filter(w => w.isMaximized).length > 0 ? 'none' : 'flex' }}
+        onMouseMove={(e) => setDockMouseX(e.clientX)}
+        onMouseLeave={handleDockLeave}
       >
         {dockApps.map(([id, app]) => {
           const matchingWindows = windows.filter(w => w.appId === id)
           const isOpen = matchingWindows.length > 0
+          const iconDistance = dockMouseX === null ? 200 : Math.abs(dockMouseX - (document.getElementById(`dock-icon-${id}`)?.getBoundingClientRect()?.left ?? 0) - 24)
+          const scale = dockMouseX === null ? 1 : Math.max(1, 1.75 - iconDistance / 110)
+          const lift = Math.max(0, (scale - 1) * 18)
 
           return (
             <div
-              key={id + nanoid()}
+              key={id}
               className="relative group"
               onMouseEnter={() => {
                 if (hoverTimeout.current) clearTimeout(hoverTimeout.current)
@@ -170,22 +186,24 @@ export const Dock = () => {
               onContextMenu={(e) => handleContextMenu(e, id)}
             >
               <button
-                onClick={() => handleClick([id, app])}
-                className="
-                  relative flex flex-col items-center justify-center gap-1 p-2
-                  rounded-lg cursor-pointer
-                  transition-transform duration-300 ease-in-out
-                  hover:scale-110 hover:brightness-110 dark:hover:brightness-125 active:scale-95
-                  hover:drop-shadow-[0_0_15px_rgba(59,130,246,0.7)] dark:hover:drop-shadow-[0_0_15px_rgba(96,165,250,0.9)]
-                "
+                id={`dock-icon-${id}`}
+                onClick={() => {
+                  setClickedAppId(id)
+                  handleClick([id, app])
+                  setTimeout(() => setClickedAppId((current) => current === id ? null : current), 360)
+                }}
+                className="relative flex flex-col items-center justify-center gap-1 p-1 rounded-xl cursor-pointer transition-transform duration-150 ease-out"
                 aria-label={`Apri ${app.name}`}
+                style={{
+                  transform: `translateY(${-lift}px) scale(${scale})`,
+                }}
               >
-                <div className="w-12 h-12 flex items-center justify-center text-white rounded-md overflow-hidden">
+                <div className={`w-12 h-12 flex items-center justify-center text-white rounded-xl overflow-hidden transition-all duration-150 ${clickedAppId === id ? 'dock-bounce' : ''}`}>
                   {typeof app.icon === 'string' ? (
                     <img
                       src={`/apps/${app.icon}`}
                       alt={app.name}
-                      className="w-10 h-10 rounded-md select-none"
+                      className="w-10 h-10 rounded-lg select-none shadow-[0_8px_18px_rgba(0,0,0,0.45)]"
                       draggable={false}
                     />
                   ) : (
@@ -194,12 +212,7 @@ export const Dock = () => {
                 </div>
                 {isOpen && (
                   <span
-                    className="
-                      absolute -bottom-1 left-1/2 -translate-x-1/2
-                      w-2 h-2 bg-green-400 rounded-full
-                      shadow-[0_0_8px_rgba(34,197,94,0.7)]
-                      animate-pulse
-                    "
+                    className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.8)]"
                   />
                 )}
               </button>
@@ -211,7 +224,7 @@ export const Dock = () => {
                     if (hoverTimeout.current) clearTimeout(hoverTimeout.current)
                   }}
                   onMouseLeave={() => setHoveredAppId(null)}
-                  className="absolute flex gap-1 bottom-20 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-lg border border-white/20 rounded-md shadow-xl z-40 p-2 space-y-2 max-h-50 overflow-y-auto"
+                  className="absolute flex gap-1 bottom-20 left-1/2 -translate-x-1/2 bg-black/45 backdrop-blur-xl border border-white/20 rounded-xl shadow-2xl z-40 p-2 space-y-2 max-h-50 overflow-y-auto"
                 >
                   {matchingWindows.length == 0 && <span className="truncate text-center">{app.name}</span>}
                   {matchingWindows.map(win => (
@@ -301,7 +314,7 @@ export const Dock = () => {
 					onClick={() => handleContextMenuAction('close-all', contextMenu.appId)}
 					>
 					<X className="w-4 h-4" />
-					{windows.map((win) => win.appId == contextMenu.appId).length > 1 ? "Chiudi tutte le finestre" : "Chiudi finestra"}
+          {windows.filter((win) => win.appId === contextMenu.appId).length > 1 ? "Chiudi tutte le finestre" : "Chiudi finestra"}
 				</li>
 			}
 		</ul>

@@ -2,11 +2,12 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useWindowManager } from '@/providers/window-manager'
 import { usePreviewRefs } from "@/providers/preview-refs"
 import clsx from 'clsx'
-import type { WindowInstance } from '@/types'
+import type { SnapBounds, WindowInstance } from '@/types'
 
 type ResizeDirection = 'left' | 'right' | 'top' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
 const SNAP_THRESHOLD = 50 //px
+const MENU_BAR_HEIGHT_PX = 36
 
 
 export const Window = ({ window }: { window: WindowInstance }) => {
@@ -21,10 +22,25 @@ export const Window = ({ window }: { window: WindowInstance }) => {
 	const ref = useRef<HTMLDivElement>(null)
 	const isDragging = useRef(false)
 	const offset = useRef({ x: 0, y: 0 })
+	const getTopSafePercent = (screenHeight: number) => (MENU_BAR_HEIGHT_PX / screenHeight) * 100
+
+	const getSnapTarget = (x: number, y: number, screenWidth: number, screenHeight: number): { maximize: boolean; bounds?: SnapBounds } | null => {
+		const topSafePercent = getTopSafePercent(screenHeight)
+		const availableHeight = 100 - topSafePercent
+
+		if (x < SNAP_THRESHOLD && y < SNAP_THRESHOLD + MENU_BAR_HEIGHT_PX) return { maximize: false, bounds: { width: 50, height: availableHeight / 2, x: 0, y: topSafePercent } }
+		if (x > screenWidth - SNAP_THRESHOLD && y < SNAP_THRESHOLD + MENU_BAR_HEIGHT_PX) return { maximize: false, bounds: { width: 50, height: availableHeight / 2, x: 50, y: topSafePercent } }
+		if (x < SNAP_THRESHOLD && y > screenHeight - SNAP_THRESHOLD) return { maximize: false, bounds: { width: 50, height: availableHeight / 2, x: 0, y: topSafePercent + availableHeight / 2 } }
+		if (x > screenWidth - SNAP_THRESHOLD && y > screenHeight - SNAP_THRESHOLD) return { maximize: false, bounds: { width: 50, height: availableHeight / 2, x: 50, y: topSafePercent + availableHeight / 2 } }
+		if (x < SNAP_THRESHOLD) return { maximize: false, bounds: { width: 50, height: availableHeight, x: 0, y: topSafePercent } }
+		if (x > screenWidth - SNAP_THRESHOLD) return { maximize: false, bounds: { width: 50, height: availableHeight, x: 50, y: topSafePercent } }
+		if (y < SNAP_THRESHOLD + MENU_BAR_HEIGHT_PX) return { maximize: true }
+		return null
+	}
 
 	useEffect(() => {
 		setPreviewRef(window.id, ref.current)
-	}, [ref, window, setPreviewRef])
+	}, [window.id, setPreviewRef])
 
 	const onPointerDown = (e: React.PointerEvent) => {
 		isDragging.current = true
@@ -51,6 +67,7 @@ export const Window = ({ window }: { window: WindowInstance }) => {
 
 		const screenWidth = document.body.clientWidth
 		const screenHeight = document.body.clientHeight
+		const topSafePercent = getTopSafePercent(screenHeight)
 
 		const xPercent = (e.clientX - offset.current.x) / screenWidth * 100
 		const yPercent = (e.clientY - offset.current.y) / screenHeight * 100
@@ -64,32 +81,19 @@ export const Window = ({ window }: { window: WindowInstance }) => {
 			const y = (e.clientY) / screenHeight * 100
 			moveWindow(window.id, {
 				x: Math.max(0, Math.min(x, 100)),
-				y: Math.max(0, Math.min(y, 100)),
+				y: Math.max(topSafePercent, Math.min(y, 100)),
 			})
 		}
 		else
 			moveWindow(window.id, {
 				x: Math.max(0, Math.min(xPercent, 100)),
-				y: Math.max(0, Math.min(yPercent, 100)),
+				y: Math.max(topSafePercent, Math.min(yPercent, 100)),
 			})
 
 
 		
-		if (e.clientX < SNAP_THRESHOLD && e.clientY < SNAP_THRESHOLD) {
-			setSnappingPosition({ width: 50, height: 50, x: 0, y: 0 }); // angolo alto sinistra
-		} else if (e.clientX > screenWidth - SNAP_THRESHOLD && e.clientY < SNAP_THRESHOLD) {
-			setSnappingPosition({ width: 50, height: 50, x: 50, y: 0 }); // angolo alto destra
-		} else if (e.clientX < SNAP_THRESHOLD && e.clientY > screenHeight - SNAP_THRESHOLD) {
-			setSnappingPosition({ width: 50, height: 50, x: 0, y: 50 }); // angolo basso sinistra
-		} else if (e.clientX > screenWidth - SNAP_THRESHOLD && e.clientY > screenHeight - SNAP_THRESHOLD) {
-			setSnappingPosition({ width: 50, height: 50, x: 50, y: 50 }); // angolo basso destra
-		} else if (e.clientX < SNAP_THRESHOLD) {
-			setSnappingPosition({ width: 50, height: 100, x: 0, y: 0 }); // sinistra
-		} else if (e.clientX > screenWidth - SNAP_THRESHOLD) {
-			setSnappingPosition({ width: 50, height: 100, x: 50, y: 0 }); // destra
-		} else if (e.clientY < SNAP_THRESHOLD) {
-			setSnappingPosition({ width: 100, height: 100, x: 0, y: 0 }); // alto (massimizza)
-		}
+		const target = getSnapTarget(e.clientX, e.clientY, screenWidth, screenHeight)
+		setSnappingPosition(target?.maximize ? { width: 100, height: 100 - topSafePercent, x: 0, y: topSafePercent } : target?.bounds ?? null)
 	}
 
 	const onPointerUp = (e: PointerEvent) => {
@@ -97,38 +101,34 @@ export const Window = ({ window }: { window: WindowInstance }) => {
 		document.removeEventListener('pointermove', onPointerMove)
 		document.removeEventListener('pointerup', onPointerUp)
 
-		if (!snappingEnabled) return;
+		if (!snappingEnabled) {
+			setSnappingPosition(null)
+			return
+		}
 
 		const screenWidth = document.body.clientWidth
 		const screenHeight = document.body.clientHeight
+		const target = getSnapTarget(e.clientX, e.clientY, screenWidth, screenHeight)
 
-		console.log(snappingPosition!)
-		if (e.clientX < SNAP_THRESHOLD && e.clientY < SNAP_THRESHOLD) {
-			snapWindow(window.id, true)
-			// angolo alto sinistra
-		} else if (e.clientX > screenWidth - SNAP_THRESHOLD && e.clientY < SNAP_THRESHOLD) {
-			snapWindow(window.id, true)
-			// angolo alto destra
-		} else if (e.clientX < SNAP_THRESHOLD && e.clientY > screenHeight - SNAP_THRESHOLD) {
-			snapWindow(window.id, true)
-			// angolo basso sinistra
-		} else if (e.clientX > screenWidth - SNAP_THRESHOLD && e.clientY > screenHeight - SNAP_THRESHOLD) {
-			snapWindow(window.id, true)
-			// angolo basso destra
-		} else if (e.clientX < SNAP_THRESHOLD) {
-			snapWindow(window.id, true)
-			// sinistra
-		} else if (e.clientX > screenWidth - SNAP_THRESHOLD) {
-			snapWindow(window.id, true)
-			// destra
-		} else if (e.clientY < SNAP_THRESHOLD) {
-			maximizeWindow(window.id, true)
-			snapWindow(window.id, true)
+		if (!target) {
+			setSnappingPosition(null)
+			return
 		}
+
+		if (target.maximize) {
+			snapWindow(window.id, false)
+			maximizeWindow(window.id, true)
+			setSnappingPosition(null)
+			return
+		}
+
+		maximizeWindow(window.id, false)
+		snapWindow(window.id, true, target.bounds)
+		setSnappingPosition(null)
 	}
 
 	const onResize = (e: React.MouseEvent, direction: ResizeDirection) => {
-		if (window.isMaximized || window.ghost) return;
+		if (window.isMaximized || window.isSnapped || window.ghost) return;
 		
 		e.preventDefault();
 		e.stopPropagation();
@@ -140,6 +140,7 @@ export const Window = ({ window }: { window: WindowInstance }) => {
 
 		const screenWidth = document.body.clientWidth;
 		const screenHeight = document.body.clientHeight;
+		const topSafePercent = getTopSafePercent(screenHeight)
 
 		const startWidth = (window.size.width / 100) * screenWidth;
 		const startHeight = (window.size.height / 100) * screenHeight;
@@ -182,7 +183,7 @@ export const Window = ({ window }: { window: WindowInstance }) => {
 
 			// Limita allo schermo
 			const safeX = Math.max(0, Math.min(leftPercent, 100 - widthPercent));
-			const safeY = Math.max(0, Math.min(topPercent, 100 - heightPercent));
+			const safeY = Math.max(topSafePercent, Math.min(topPercent, 100 - heightPercent));
 
 			resizeWindow(window.id, {
 				width: Math.min(widthPercent, 100),
@@ -233,86 +234,105 @@ export const Window = ({ window }: { window: WindowInstance }) => {
 		maximizeWindow(window.id)
 	};
 
-	if (window.isMinimized) return
+	if (window.isMinimized) return null
 
-	const element = React.createElement(getWindowComponent(window.id)!, window.params);
+	const component = getWindowComponent(window.id)
+	if (!component) return null
+
+	const element = React.createElement(component, window.params);
+	const menuBarPercent = getTopSafePercent(document.body.clientHeight)
+	const isHeaderOverlay = window.isMaximized && !window.ghost
 
 	return (
 		<>	
-			{snappingPosition && !window.isSnapped && <div className="absolute top-0 left-0 backdrop-blur-3xl bg-white/20 m-1 rounded-3xl border border-white/10"
+			{snappingPosition && !window.isSnapped && <div className="absolute top-0 left-0 backdrop-blur-3xl bg-cyan-300/20 m-1 rounded-3xl border border-cyan-100/40 shadow-[0_0_35px_rgba(34,211,238,0.25)]"
 				style={{ width: `${snappingPosition.width}%`, height: `${snappingPosition.height}%`, left: `${snappingPosition.x}%`, top: `${snappingPosition.y}%`}}
 			></div>}
 			<div
 				ref={ref}
 				className={clsx(
 					'absolute ',
-					'border border-white/10 shadow-xl backdrop-blur-2xl bg-white/10 overflow-hidden flex flex-col',
+					'group/window overflow-hidden flex flex-col transition-[box-shadow,filter,border-color,background-color] duration-200 border',
+					window.isFocused
+						? 'border-white/30 bg-black/10 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-2xl'
+						: 'border-white/18 bg-black/6 shadow-[0_12px_30px_rgba(0,0,0,0.32)] backdrop-blur-xl',
 					window.isFocused ? 'z-50' : 'z-10',
 					isClosing && 'animate-close-window',
 					isMinimizing && 'animate-minimize-window',
-					!window.isMaximized && !window.isSnapped && 'rounded-3xl'
+					!window.isMaximized && !window.isSnapped && 'rounded-2xl'
 				)}
 				
 				style={{
-					left: window.isMaximized ? 0 : window.isSnapped && snappingPosition ? `${snappingPosition.x}%` : `${window.position.x}%`,
-					top: window.isMaximized ? 0 : window.isSnapped && snappingPosition ? `${snappingPosition.y}%` : `${window.position.y}%`,
-					width: window.isMaximized ? "100%" : window.isSnapped && snappingPosition ? `${snappingPosition.width}%` : `${window.size.width}%`,
-					height: window.isMaximized ? "100%" : window.isSnapped && snappingPosition ? `${snappingPosition.height}%` : `${window.size.height}%`,
+					left: window.isMaximized ? 0 : window.isSnapped && window.snapBounds ? `${window.snapBounds.x}%` : `${window.position.x}%`,
+					top: window.isMaximized ? `${menuBarPercent}%` : window.isSnapped && window.snapBounds ? `${window.snapBounds.y}%` : `${window.position.y}%`,
+					width: window.isMaximized ? "100%" : window.isSnapped && window.snapBounds ? `${window.snapBounds.width}%` : `${window.size.width}%`,
+					height: window.isMaximized ? `${100 - menuBarPercent}%` : window.isSnapped && window.snapBounds ? `${window.snapBounds.height}%` : `${window.size.height}%`,
 				}}
 				
 				onClick={() => focusWindow(window.id, true)}
+				onPointerDownCapture={() => focusWindow(window.id, true)}
+				role="dialog"
+				aria-label={window.title}
 				onAnimationEnd={(e) => {
 					if (e.animationName === 'close-window') onCloseAnimationEnd();
 					if (e.animationName === 'minimize-window') onMinimizeAnimationEnd();
 				}}
 			>
+			{isHeaderOverlay && (
+				<div className="peer/titlebar-hotspot absolute left-0 right-0 top-0 z-20 h-3" />
+			)}
 			{!window.ghost
 				? <div
-					className="flex items-center justify-between px-4 py-2 cursor-move select-none bg-black/10 rounded-3xl mx-2 mt-2"
+					className={clsx(
+						"flex items-center justify-between px-3 py-1.5 cursor-move select-none border-b",
+						window.isFocused ? "bg-black/25 border-white/15" : "bg-black/28 border-white/10",
+						isHeaderOverlay && "absolute left-0 right-0 top-0 z-30 opacity-0 -translate-y-2 pointer-events-none transition-all duration-200 peer-hover/titlebar-hotspot:opacity-100 peer-hover/titlebar-hotspot:translate-y-0 peer-hover/titlebar-hotspot:pointer-events-auto hover:opacity-100 hover:translate-y-0 hover:pointer-events-auto group-focus-within/window:opacity-100 group-focus-within/window:translate-y-0 group-focus-within/window:pointer-events-auto"
+					)}
 					onPointerDown={onPointerDown}
 					>
-					<div className="flex-1 flex gap-2 items-center">
-						<img className="h-5 w-auto -my-2 -ml-1 select-none" src={`/apps/${window.icon}`} alt={window.title}/>
-						<span className="text-sm text-white font-semibold truncate max-w-[75%] ">
+					<div className="flex-1 flex gap-2 items-center min-w-0">
+						<img className="h-4 w-4 rounded-sm select-none" src={`/apps/${window.icon}`} alt={window.title}/>
+						<span className={clsx(
+							"text-[13px] truncate",
+							window.isFocused ? "text-white font-semibold" : "text-white/85 font-medium"
+						)}>
 							{window.title}
 						</span>
 					</div>
 			
-					{/* Bottoni stile macOS */}
-					<div className="flex space-x-1.5 ">
+					<div className="flex space-x-1.5 ml-3">
 					<button
-						aria-label="Apri"
-						className="w-3.5 h-3.5 rounded-full bg-green-500 hover:bg-green-400 transition-colors duration-200 shadow-md"
+						aria-label="Massimizza"
+						className="w-3.5 h-3.5 rounded-full bg-emerald-500/95 hover:bg-emerald-400 transition-all duration-150 shadow-[0_0_10px_rgba(16,185,129,0.45)]"
 						onClick={handleMaximizeClick}
 					/>
 					<button
 						aria-label="Minimizza"
 						onClick={handleMinimizeClick}
-						className="w-3.5 h-3.5 rounded-full bg-yellow-500 hover:bg-yellow-400 transition-colors duration-200 shadow-md"
+						className="w-3.5 h-3.5 rounded-full bg-amber-400/95 hover:bg-amber-300 transition-all duration-150 shadow-[0_0_10px_rgba(250,204,21,0.45)]"
 					/>
 					<button
 						aria-label="Chiudi"
 						onClick={handleCloseClick}
-						className="w-3.5 h-3.5 rounded-full bg-red-500 hover:bg-red-400 transition-colors duration-200 shadow-md"
+						className="w-3.5 h-3.5 rounded-full bg-rose-500/95 hover:bg-rose-400 transition-all duration-150 shadow-[0_0_10px_rgba(244,63,94,0.45)]"
 					/>
 					</div>
 				</div>
 				:
 				<div
-				className="flex items-center justify-between px-4 pt-1 select-none rounded-3xl mx-2 mt-2"
+				className="flex items-center justify-between px-3 py-1.5 select-none bg-black/25 border-b border-white/10"
 				>
-				<div className="flex-1 flex gap-2 items-center">
-					<span className="text-sm text-white font-semibold truncate max-w-[75%] ">
+				<div className="flex-1 flex gap-2 items-center min-w-0">
+					<span className="text-sm text-white/90 font-medium truncate max-w-[75%] ">
 						{window.title}
 					</span>
 				</div>
 		
-				{/* Bottoni stile macOS */}
 				<div className="flex space-x-1.5 ">
 				<button
 					aria-label="Chiudi"
 					onClick={handleCloseClick}
-					className="w-3.5 h-3.5 rounded-full bg-red-500 hover:bg-red-400 transition-colors duration-200 shadow-md"
+					className="w-3.5 h-3.5 rounded-full bg-rose-500/95 hover:bg-rose-400 transition-all duration-150"
 				/>
 				</div>
 				</div>
@@ -320,7 +340,9 @@ export const Window = ({ window }: { window: WindowInstance }) => {
 			}
 			
 			{/* Contenuto */}
-			<div className="flex-1 p-2 overflow-hidden text-white" ref={el => setPreviewRef(window.id, el)} onClick={() => focusWindow(window.id, true)}>{element}</div>
+			<div className="flex-1 overflow-hidden text-white bg-transparent" ref={el => setPreviewRef(window.id, el)} onClick={() => focusWindow(window.id, true)} onMouseDownCapture={() => focusWindow(window.id, true)}>
+				<div className="w-full h-full">{element}</div>
+			</div>
 		
 			{/* Angolo per il resize invisibile */}
 				{!window.ghost && <>

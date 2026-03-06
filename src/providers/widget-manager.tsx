@@ -10,7 +10,7 @@ type WidgetContextType = {
   removeWidget: (id: string) => void;
   moveWidget: (id: string, position: { x: number, y: number }) => void;
   resizeWidget: (id: string, size: { width: number, height: number }) => void;
-  getWidgetComponent: (id: string) => React.FC<any> | null
+  getWidgetComponent: (id: string) => React.ComponentType<Record<string, unknown>> | null
 };
 
 const WidgetContext = createContext<WidgetContextType | undefined>(undefined);
