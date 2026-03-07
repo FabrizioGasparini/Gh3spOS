@@ -54,6 +54,7 @@ export const Terminal = ({ windowId }: { windowId: string }) => {
 	const terminalMountRef = useRef<HTMLDivElement>(null)
 	const termRef = useRef<XTerm | null>(null)
 	const inputRef = useRef('')
+	const cursorPosRef = useRef(0)
 	const historyIndexRef = useRef(-1)
 
 	const prompt = useMemo(() => {
@@ -148,10 +149,10 @@ export const Terminal = ({ windowId }: { windowId: string }) => {
 			scrollback: 200,
 			convertEol: true,
 			theme: {
-				background: '#0b1020',
+				background: '#00000000',
 				foreground: '#d1fae5',
 				cursor: '#34d399',
-				selectionBackground: '#1f2937',
+				selectionBackground: '#1f293780',
 			},
 		})
 
@@ -167,6 +168,10 @@ export const Terminal = ({ windowId }: { windowId: string }) => {
 		const redrawInput = () => {
 			term.write('\r\x1b[2K')
 			term.write(promptRef.current + inputRef.current)
+			const charsRight = inputRef.current.length - cursorPosRef.current
+			if (charsRight > 0) {
+				term.write(`\x1b[${charsRight}D`)
+			}
 		}
 
 		const printPrompt = () => {
@@ -190,6 +195,7 @@ export const Terminal = ({ windowId }: { windowId: string }) => {
 			if (!raw) {
 				printPrompt()
 				inputRef.current = ''
+				cursorPosRef.current = 0
 				return
 			}
 
@@ -201,6 +207,7 @@ export const Terminal = ({ windowId }: { windowId: string }) => {
 				setOutputRef.current((prev) => [...prev, msg])
 				printOutput(msg)
 				inputRef.current = ''
+				cursorPosRef.current = 0
 				printPrompt()
 				return
 			}
@@ -210,6 +217,7 @@ export const Terminal = ({ windowId }: { windowId: string }) => {
 				if (cmd === 'clear') {
 					term.clear()
 					inputRef.current = ''
+					cursorPosRef.current = 0
 					term.write(promptRef.current)
 					return
 				}
@@ -225,6 +233,7 @@ export const Terminal = ({ windowId }: { windowId: string }) => {
 			}
 
 			inputRef.current = ''
+			cursorPosRef.current = 0
 			printPrompt()
 		}
 
@@ -241,19 +250,37 @@ export const Terminal = ({ windowId }: { windowId: string }) => {
 			if (data === '\u0003') {
 				term.write('^C')
 				inputRef.current = ''
+				cursorPosRef.current = 0
 				printPrompt()
 				return
 			}
 
 			if (data === '\u000c') {
 				term.clear()
-				term.write(promptRef.current + inputRef.current)
+				redrawInput()
 				return
 			}
 
 			if (data === '\u007F') {
-				if (!inputRef.current) return
-				inputRef.current = inputRef.current.slice(0, -1)
+				if (!inputRef.current || cursorPosRef.current <= 0) return
+				const left = inputRef.current.slice(0, cursorPosRef.current - 1)
+				const right = inputRef.current.slice(cursorPosRef.current)
+				inputRef.current = left + right
+				cursorPosRef.current -= 1
+				redrawInput()
+				return
+			}
+
+			if (data === '\x1b[D') {
+				if (cursorPosRef.current <= 0) return
+				cursorPosRef.current -= 1
+				redrawInput()
+				return
+			}
+
+			if (data === '\x1b[C') {
+				if (cursorPosRef.current >= inputRef.current.length) return
+				cursorPosRef.current += 1
 				redrawInput()
 				return
 			}
@@ -262,6 +289,7 @@ export const Terminal = ({ windowId }: { windowId: string }) => {
 				if (commandsRef.current.length === 0 || historyIndexRef.current >= commandsRef.current.length - 1) return
 				historyIndexRef.current += 1
 				inputRef.current = commandsRef.current[commandsRef.current.length - 1 - historyIndexRef.current] || ''
+				cursorPosRef.current = inputRef.current.length
 				redrawInput()
 				return
 			}
@@ -270,11 +298,13 @@ export const Terminal = ({ windowId }: { windowId: string }) => {
 				if (historyIndexRef.current <= 0) {
 					historyIndexRef.current = -1
 					inputRef.current = ''
+					cursorPosRef.current = 0
 					redrawInput()
 					return
 				}
 				historyIndexRef.current -= 1
 				inputRef.current = commandsRef.current[commandsRef.current.length - 1 - historyIndexRef.current] || ''
+				cursorPosRef.current = inputRef.current.length
 				redrawInput()
 				return
 			}
@@ -287,6 +317,7 @@ export const Terminal = ({ windowId }: { windowId: string }) => {
 				}
 				if (suggestions.length === 1) {
 					inputRef.current = applySuggestion(inputRef.current, suggestions[0])
+					cursorPosRef.current = inputRef.current.length
 					redrawInput()
 					return
 				}
@@ -296,8 +327,11 @@ export const Terminal = ({ windowId }: { windowId: string }) => {
 			}
 
 			if (data >= ' ' && data <= '~') {
-				inputRef.current += data
-				term.write(data)
+				const left = inputRef.current.slice(0, cursorPosRef.current)
+				const right = inputRef.current.slice(cursorPosRef.current)
+				inputRef.current = left + data + right
+				cursorPosRef.current += data.length
+				redrawInput()
 			}
 		})
 
@@ -323,12 +357,8 @@ export const Terminal = ({ windowId }: { windowId: string }) => {
 	}, [])
 
 	return (
-		<div className="relative h-full w-full bg-[#0b1020]/95 border border-emerald-300/20 rounded-xl shadow-xl flex flex-col overflow-hidden">
-			<div className="px-3 py-1.5 border-b border-emerald-300/20 text-[11px] font-mono text-emerald-200/80 bg-black/25 flex items-center justify-between">
-				<span>{USERNAME}@{HOSTNAME}</span>
-				<span>Tab autocomplete · ↑↓ history · Ctrl+L clear</span>
-			</div>
-			<div ref={terminalMountRef} className="flex-1 overflow-hidden" />
+		<div className="relative h-full w-full p-0 gap-0 bg-white/[0.06] shadow-[0_18px_45px_rgba(0,0,0,0.45)] backdrop-blur-2xl overflow-hidden">
+			<div ref={terminalMountRef} className="w-full h-full overflow-auto bg-black/10 custom-scroll" />
 		</div>
 	)
 }

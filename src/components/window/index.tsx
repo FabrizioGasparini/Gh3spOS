@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useWindowManager } from '@/providers/window-manager'
 import { usePreviewRefs } from "@/providers/preview-refs"
+import { usePersistentStore } from '@/providers/persistent-store'
 import clsx from 'clsx'
 import type { SnapBounds, WindowInstance } from '@/types'
+import { DEFAULT_DESKTOP_SETTINGS, resolveDesktopSettings, type DesktopSettings } from '@/config/system-settings'
 
 type ResizeDirection = 'left' | 'right' | 'top' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
@@ -13,6 +15,8 @@ const MENU_BAR_HEIGHT_PX = 36
 export const Window = ({ window }: { window: WindowInstance }) => {
 	const { closeWindow, minimizeWindow, maximizeWindow, focusWindow, resizeWindow, moveWindow, getWindowComponent, snappingEnabled, snapWindow } = useWindowManager()
 	const { setPreviewRef } = usePreviewRefs()
+	const [storedSettings] = usePersistentStore<DesktopSettings>('gh3sp:settings', DEFAULT_DESKTOP_SETTINGS)
+	const settings = resolveDesktopSettings(storedSettings)
 	const [ snappingPosition, setSnappingPosition ] = useState<{width: number, height: number, x: number, y: number} | null>(null)
 
 	const [isClosing, setIsClosing] = useState(false);
@@ -252,17 +256,24 @@ export const Window = ({ window }: { window: WindowInstance }) => {
 				ref={ref}
 				className={clsx(
 					'absolute ',
-					'group/window overflow-hidden flex flex-col transition-[box-shadow,filter,border-color,background-color] duration-200 border',
+					'group/window overflow-hidden flex flex-col transition-[box-shadow,filter,border-color,background-color,opacity,transform] border',
+					settings.reduceMotion ? 'duration-0' : 'duration-200',
 					window.isFocused
-						? 'border-white/30 bg-black/10 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-2xl'
-						: 'border-white/18 bg-black/6 shadow-[0_12px_30px_rgba(0,0,0,0.32)] backdrop-blur-xl',
+						? (settings.reduceTransparency
+							? 'border-white/30 bg-slate-900/95'
+							: 'border-white/30 bg-black/10 backdrop-blur-2xl')
+						: (settings.reduceTransparency
+							? 'border-white/18 bg-slate-900/90'
+							: 'border-white/18 bg-black/6 backdrop-blur-xl'),
+					settings.stageManager && !window.isFocused ? 'opacity-75 scale-[0.985]' : 'opacity-100 scale-100',
 					window.isFocused ? 'z-50' : 'z-10',
 					isClosing && 'animate-close-window',
 					isMinimizing && 'animate-minimize-window',
-					!window.isMaximized && !window.isSnapped && 'rounded-2xl'
+					!window.isMaximized && !window.isSnapped ? 'rounded-2xl' : 'rounded-none'
 				)}
 				
 				style={{
+					opacity: settings.windowOpacity / 100,
 					left: window.isMaximized ? 0 : window.isSnapped && window.snapBounds ? `${window.snapBounds.x}%` : `${window.position.x}%`,
 					top: window.isMaximized ? `${menuBarPercent}%` : window.isSnapped && window.snapBounds ? `${window.snapBounds.y}%` : `${window.position.y}%`,
 					width: window.isMaximized ? "100%" : window.isSnapped && window.snapBounds ? `${window.snapBounds.width}%` : `${window.size.width}%`,

@@ -1,13 +1,17 @@
 import type { WidgetInstance } from '@/types'
 import { useWidgetManager } from '@/providers/widget-manager'
 import React from 'react';
+import { usePersistentStore } from '@/providers/persistent-store';
+import { DEFAULT_DESKTOP_SETTINGS, resolveDesktopSettings, type DesktopSettings } from '@/config/system-settings';
 
 export const WidgetWrapper = ({ widget }: { widget: WidgetInstance }) => {
 	const { removeWidget, getWidgetComponent } = useWidgetManager()
+	const [storedSettings] = usePersistentStore<DesktopSettings>('gh3sp:settings', DEFAULT_DESKTOP_SETTINGS)
+	const settings = resolveDesktopSettings(storedSettings)
 
 	const WidgetComponent = React.createElement(getWidgetComponent(widget.id)!);
 	return (
-		<div className="rounded-xl border border-white/20 shadow-xl backdrop-blur-md bg-white/10 overflow-hidden relative w-full h-full group">
+		<div className={`rounded-xl shadow-xl overflow-hidden relative w-full h-full group ${settings.widgetsBlur ? 'backdrop-blur-md' : ''} ${settings.widgetsAccentBorders ? 'border border-blue-300/35' : 'border border-white/12'}`}>
 			{/* Bottone chiusura */}
 			<button
 				onClick={() => removeWidget(widget.id)}

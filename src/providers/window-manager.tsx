@@ -1,9 +1,10 @@
-import React, { createContext, useContext, useMemo, useState } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { nanoid } from 'nanoid'
 import type { AppDefinition, SnapBounds, WindowInstance, WindowParamType } from '@/types'
 import { usePersistentStore } from './persistent-store'
 import { useApps } from './apps'
+import { DEFAULT_DESKTOP_SETTINGS, resolveDesktopSettings } from '@/config/system-settings'
 
 const MENU_BAR_HEIGHT_PX = 36
 
@@ -42,7 +43,23 @@ export const useWindowManager = () => {
 export const WindowManagerProvider = ({ children }: { children: ReactNode }) => {
 	const { apps } = useApps()
 	const [windows, setWindows] = usePersistentStore<WindowInstance[]>('windows-manager:windows', [])
-	const [snappingEnabled, setSnappingEnabled] = useState(true)
+	const [storedSettings, setStoredSettings] = usePersistentStore('gh3sp:settings', DEFAULT_DESKTOP_SETTINGS)
+	const settings = useMemo(() => resolveDesktopSettings(storedSettings), [storedSettings])
+	const initRef = useRef(false)
+
+	useEffect(() => {
+		if (initRef.current) return
+		initRef.current = true
+		if (!settings.openAppsOnBoot) {
+			setWindows([])
+		}
+	}, [setWindows, settings.openAppsOnBoot])
+
+	const setSnappingEnabled = (value: boolean) => {
+		setStoredSettings((prev) => ({ ...resolveDesktopSettings(prev), windowSnapping: value }))
+	}
+
+	const snappingEnabled = settings.windowSnapping
 
 	const resolvedComponents = useMemo(() => {
 		const map = new Map<string, React.ComponentType<Record<string, unknown>>>()

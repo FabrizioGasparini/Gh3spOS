@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 type Store = Record<string, unknown>
 type PersistentContextType = {
   get: <T>(key: string) => T | undefined
-  set: <T>(key: string, value: T) => void
+  set: <T>(key: string, value: T | ((prev: T) => T)) => void
 }
 
 const PersistentContext = createContext<PersistentContextType | null>(null)
@@ -22,10 +22,12 @@ export const PersistentStoreProvider = ({ children }: { children: React.ReactNod
     localStorage.setItem('gh3sp-persistent-store', JSON.stringify(store))
   }, [store])
 
-  const set = useCallback(<T,>(key: string, value: T) => {
+  const set = useCallback(<T,>(key: string, value: T | ((prev: T) => T)) => {
     setStore((prev) => {
-      if (Object.is(prev[key], value)) return prev
-      const next = { ...prev, [key]: value }
+      const current = prev[key] as T | undefined
+      const nextValue = typeof value === 'function' ? (value as (prev: T) => T)((current as T)) : value
+      if (Object.is(current, nextValue)) return prev
+      const next = { ...prev, [key]: nextValue }
       return next
     })
   }, [])
@@ -47,19 +49,17 @@ export const usePersistentStore = <T,>(key: string, defaultValue: T): [T, (v: T 
   const ctx = useContext(PersistentContext)
   if (!ctx) throw new Error('usePersistentStore must be used within a PersistentStoreProvider')
 
-    const saved = ctx.get<T>(key)
-    const [value, setValue] = useState<T>(saved ?? defaultValue)
+  const saved = ctx.get<T>(key)
+  const value = (saved ?? defaultValue) as T
 
   useEffect(() => {
-    ctx.set(key, value)
-  }, [ctx, key, value])
+    if (saved === undefined) {
+      ctx.set(key, defaultValue)
+    }
+  }, [ctx, defaultValue, key, saved])
 
   const set = (v: T | ((prev: T) => T)) => {
-    if (typeof v === 'function') {
-      setValue(prev => (v as (prev: T) => T)(prev))
-    } else {
-      setValue(v)
-    }
+    ctx.set(key, v)
   }
 
   return [value, set]

@@ -5,16 +5,21 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { usePreviewRefs } from "@/providers/preview-refs"
 import html2canvas from 'html2canvas-pro'
 import { Minimize, X } from 'lucide-react'
+import { usePersistentStore } from '@/providers/persistent-store'
+import { DEFAULT_DESKTOP_SETTINGS, resolveDesktopSettings, type DesktopSettings } from '@/config/system-settings'
 
 export const Dock = () => {
   const { apps } = useApps()
   const { windows, openWindow, focusWindow, minimizeWindow, closeWindow } = useWindowManager()
   const [hoveredAppId, setHoveredAppId] = useState<string | null>(null)
-  const [dockMouseX, setDockMouseX] = useState<number | null>(null)
+  const [dockMouseAxis, setDockMouseAxis] = useState<number | null>(null)
   const [clickedAppId, setClickedAppId] = useState<string | null>(null)
+  const [isDockHovered, setIsDockHovered] = useState(false)
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [previews, setPreviews] = useState<Record<string, string>>({})
   const { getPreviewRef } = usePreviewRefs()
+  const [storedSettings] = usePersistentStore<DesktopSettings>('gh3sp:settings', DEFAULT_DESKTOP_SETTINGS)
+  const settings = useMemo(() => resolveDesktopSettings(storedSettings), [storedSettings])
 
   // Per il context menu
   const [contextMenu, setContextMenu] = useState<{
@@ -132,10 +137,17 @@ export const Dock = () => {
   const closeContextMenu = () => setContextMenu(null)
 
   const handleDockLeave = () => {
-    setDockMouseX(null)
+    setDockMouseAxis(null)
+    setIsDockHovered(false)
     if (hoverTimeout.current) clearTimeout(hoverTimeout.current)
     hoverTimeout.current = setTimeout(() => setHoveredAppId(null), 120)
   }
+
+  const dockPositionClass = settings.dockPosition === 'left'
+    ? 'left-4 top-1/2 -translate-y-1/2 flex-col'
+    : settings.dockPosition === 'right'
+      ? 'right-4 top-1/2 -translate-y-1/2 flex-col'
+      : 'bottom-4 left-1/2 -translate-x-1/2 flex-row'
 
   // Azioni menu contestuale
   const handleContextMenuAction = (action: string, appId: string) => {
@@ -160,17 +172,23 @@ export const Dock = () => {
     <>
       {/* Dock normale */}
       <div
-        className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-[95] flex items-end gap-3 px-4 py-2 rounded-2xl border border-white/25 bg-white/12 backdrop-blur-2xl shadow-[0_15px_45px_rgba(0,0,0,0.5)] transition-all duration-200`}
-        style={{ display: windows.filter(w => w.isMaximized).length > 0 ? 'none' : 'flex' }}
-        onMouseMove={(e) => setDockMouseX(e.clientX)}
+  		className={`fixed ${dockPositionClass} z-[95] flex items-end gap-3 px-4 py-2 rounded-2xl border border-white/25 bg-white/12 backdrop-blur-2xl shadow-[0_15px_45px_rgba(0,0,0,0.5)] transition-all duration-200`}
+        style={{ display: windows.filter(w => w.isMaximized).length > 0 ? 'none' : 'flex', opacity: settings.dockAutoHide && !isDockHovered ? 0.12 : 1 }}
+        onMouseMove={(e) => setDockMouseAxis(settings.dockPosition === 'bottom' ? e.clientX : e.clientY)}
+        onMouseEnter={() => setIsDockHovered(true)}
         onMouseLeave={handleDockLeave}
       >
         {dockApps.map(([id, app]) => {
           const matchingWindows = windows.filter(w => w.appId === id)
           const isOpen = matchingWindows.length > 0
-          const iconDistance = dockMouseX === null ? 200 : Math.abs(dockMouseX - (document.getElementById(`dock-icon-${id}`)?.getBoundingClientRect()?.left ?? 0) - 24)
-          const scale = dockMouseX === null ? 1 : Math.max(1, 1.75 - iconDistance / 110)
+          const iconRect = document.getElementById(`dock-icon-${id}`)?.getBoundingClientRect()
+          const iconCenter = settings.dockPosition === 'bottom'
+            ? (iconRect?.left ?? 0) + 24
+            : (iconRect?.top ?? 0) + 24
+          const iconDistance = dockMouseAxis === null ? 200 : Math.abs(dockMouseAxis - iconCenter)
+          const scale = !settings.dockMagnification || dockMouseAxis === null ? 1 : Math.max(1, 1.75 - iconDistance / 110)
           const lift = Math.max(0, (scale - 1) * 18)
+          const iconSize = settings.dockIconSize
 
           return (
             <div
@@ -198,12 +216,16 @@ export const Dock = () => {
                   transform: `translateY(${-lift}px) scale(${scale})`,
                 }}
               >
-                <div className={`w-12 h-12 flex items-center justify-center text-white rounded-xl overflow-hidden transition-all duration-150 ${clickedAppId === id ? 'dock-bounce' : ''}`}>
+                <div
+                  className={`flex items-center justify-center text-white rounded-xl overflow-hidden transition-all duration-150 ${clickedAppId === id ? 'dock-bounce' : ''}`}
+                  style={{ width: `${iconSize + 8}px`, height: `${iconSize + 8}px` }}
+                >
                   {typeof app.icon === 'string' ? (
                     <img
                       src={`/apps/${app.icon}`}
                       alt={app.name}
-                      className="w-10 h-10 rounded-lg select-none shadow-[0_8px_18px_rgba(0,0,0,0.45)]"
+                      className="rounded-lg select-none shadow-[0_8px_18px_rgba(0,0,0,0.45)]"
+                      style={{ width: `${iconSize}px`, height: `${iconSize}px` }}
                       draggable={false}
                     />
                   ) : (

@@ -1,4 +1,6 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext } from 'react';
+import { usePersistentStore } from './persistent-store';
+import { DEFAULT_DESKTOP_SETTINGS, resolveDesktopSettings } from '@/config/system-settings';
 
 type WallpaperContextType = {
   wallpaper: string;
@@ -8,10 +10,15 @@ type WallpaperContextType = {
 const WallpaperContext = createContext<WallpaperContextType | undefined>(undefined);
 
 export const WallpaperProvider = ({ children }: { children: React.ReactNode }) => {
-  const [wallpaper, setWallpaper] = useState<string>('/wallpapers/default.jpg');
+  const [storedSettings, setStoredSettings] = usePersistentStore('gh3sp:settings', DEFAULT_DESKTOP_SETTINGS);
+  const settings = resolveDesktopSettings(storedSettings);
+
+  const setWallpaper = (url: string) => {
+    setStoredSettings((prev) => ({ ...resolveDesktopSettings(prev), wallpaper: url }));
+  };
 
   return (
-    <WallpaperContext.Provider value={{ wallpaper, setWallpaper }}>
+    <WallpaperContext.Provider value={{ wallpaper: settings.wallpaper, setWallpaper }}>
       {children}
     </WallpaperContext.Provider>
   );

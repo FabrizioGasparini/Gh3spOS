@@ -18,6 +18,35 @@ body {
   overflow: hidden;
 }
 
+:root {
+  --gh3sp-accent: #3b82f6;
+}
+
+body.theme-light {
+  color-scheme: light;
+}
+
+body.theme-dark {
+  color-scheme: dark;
+}
+
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0ms !important;
+  transition-duration: 0ms !important;
+  scroll-behavior: auto !important;
+}
+
+.reduce-transparency .backdrop-blur-3xl,
+.reduce-transparency .backdrop-blur-2xl,
+.reduce-transparency .backdrop-blur-xl,
+.reduce-transparency .backdrop-blur-lg,
+.reduce-transparency .backdrop-blur-md,
+.reduce-transparency [style*="backdrop-filter"] {
+  backdrop-filter: none !important;
+}
+
 
 @keyframes close-window {
   0% {

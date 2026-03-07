@@ -22,6 +22,7 @@ type AuthContextType = {
 	login: (username: string, password: string) => LoginResult
 	logout: () => void
 	createUser: (input: { username: string; displayName: string; password: string; role?: 'admin' | 'user' }) => LoginResult
+	updateUser: (input: { id: string; username?: string; displayName?: string; password?: string; role?: 'admin' | 'user' }) => LoginResult
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -104,6 +105,52 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 		return { ok: true }
 	}, [currentUser?.role, setUsers, users])
 
+	const updateUser = useCallback((input: { id: string; username?: string; displayName?: string; password?: string; role?: 'admin' | 'user' }): LoginResult => {
+		if (!currentUser) return { ok: false, error: 'Sessione non valida' }
+
+		const target = users.find((u) => u.id === input.id)
+		if (!target) return { ok: false, error: 'Utente non trovato' }
+
+		const canManageAll = currentUser.role === 'admin'
+		const isSelf = currentUser.id === target.id
+
+		if (!canManageAll && !isSelf) {
+			return { ok: false, error: 'Permessi insufficienti per modificare questo utente' }
+		}
+
+		const requestedUsername = input.username == undefined ? target.username : normalizeUsername(input.username)
+		const requestedDisplayName = input.displayName == undefined ? target.displayName : input.displayName.trim()
+		const requestedPassword = input.password == undefined ? target.password : input.password.trim()
+		const requestedRole = input.role == undefined ? target.role : input.role
+
+		if (!canManageAll) {
+			if (requestedDisplayName.length < 2) return { ok: false, error: 'Nome visualizzato minimo 2 caratteri' }
+			setUsers((prev) => prev.map((user) => user.id === target.id ? { ...user, displayName: requestedDisplayName } : user))
+			return { ok: true }
+		}
+
+		if (requestedUsername.length < 3) return { ok: false, error: 'Username minimo 3 caratteri' }
+		if (requestedDisplayName.length < 2) return { ok: false, error: 'Nome visualizzato minimo 2 caratteri' }
+		if (requestedPassword.length < 4) return { ok: false, error: 'Password minima 4 caratteri' }
+
+		if (users.some((u) => u.id !== target.id && normalizeUsername(u.username) === requestedUsername)) {
+			return { ok: false, error: 'Username già esistente' }
+		}
+
+		setUsers((prev) => prev.map((user) => {
+			if (user.id !== target.id) return user
+			return {
+				...user,
+				username: requestedUsername,
+				displayName: requestedDisplayName,
+				password: requestedPassword,
+				role: requestedRole,
+			}
+		}))
+
+		return { ok: true }
+	}, [currentUser, setUsers, users])
+
 	const value: AuthContextType = {
 		users,
 		currentUser,
@@ -112,6 +159,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 		login,
 		logout,
 		createUser,
+		updateUser,
 	}
 
 	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
