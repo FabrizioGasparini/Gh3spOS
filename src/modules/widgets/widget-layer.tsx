@@ -7,30 +7,30 @@ export const WidgetLayer = () => {
   const { widgets } = useWidgetManager()
   const [storedSettings] = usePersistentStore<DesktopSettings>('gh3sp:settings', DEFAULT_DESKTOP_SETTINGS)
   const settings = resolveDesktopSettings(storedSettings)
+  const sortedWidgets = [...widgets].sort((a, b) => (a.zIndex ?? 1) - (b.zIndex ?? 1))
 
   return (
     <div
-      className="absolute inset-0 pt-12 pb-28 grid gap-4 p-4 pointer-events-none"
-      style={{
-        gridTemplateColumns: `repeat(${settings.widgetsColumns}, 1fr)`,
-        gridTemplateRows: 'repeat(9, minmax(90px, 1fr))',
-        maxHeight: '100vh', // non va oltre la viewport
-      }}
+      data-widget-layer="true"
+      className="absolute inset-x-0 top-0 bottom-28 pointer-events-none overflow-visible"
     >
-      {widgets.map(w => {
-        // Fallback su dimensioni accettabili
-        const width = Math.min(Math.max(w.size.width, 1), settings.widgetsColumns)
-        const height = Math.min(Math.max(w.size.height, 1), 5)
+      {sortedWidgets.map(w => {
+        const opacity = Math.max(0, Math.min(100, Math.round((w.style?.opacity ?? 78) * (settings.widgetsOpacity / 100))))
+        const blur = settings.widgetsBlur ? (w.style?.blur ?? 12) : 0
 
         return (
           <div
             key={w.id}
-            className="pointer-events-auto rounded-xl shadow-xl overflow-hidden"
+            className="pointer-events-auto rounded-2xl overflow-visible absolute transition-[box-shadow,transform,backdrop-filter,background-color] duration-200"
             style={{
-              gridColumn: `span ${width}`,
-              gridRow: `span ${height}`,
-              backgroundColor: `rgba(255,255,255,${settings.widgetsOpacity / 100 * 0.16})`,
-              backdropFilter: settings.widgetsBlur ? 'blur(16px)' : 'none',
+              left: `${w.position.x}%`,
+              top: `${w.position.y}%`,
+              width: `${w.size.width}px`,
+              height: `${w.size.height}px`,
+              zIndex: w.zIndex ?? 1,
+              backgroundColor: `rgba(255,255,255,${opacity / 100 * 0.18})`,
+              backdropFilter: `blur(${blur}px)`,
+              boxShadow: `0 12px 42px rgba(0,0,0,${0.22 * (opacity / 100)})`,
             }}
           >
             <WidgetWrapper widget={w} />

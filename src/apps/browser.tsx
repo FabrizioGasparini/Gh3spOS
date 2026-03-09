@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePersistentStore } from '@/providers/persistent-store'
 import { useAuth } from '@/providers/auth'
+import { useApps } from '@/providers/apps'
 
 const REMOTE_BROWSER_URL = 'http://localhost:7900/vnc.html?autoconnect=1&resize=scale&view_only=0&reconnect=1'
 const DEFAULT_SECURE_BROWSER_URL = 'https://www.google.com'
@@ -32,7 +33,9 @@ const fetchSecureBrowser = async (path: string, init?: RequestInit): Promise<Sec
 
 export const BrowserApp: React.FC<{ windowId: string }> = () => {
 	const { currentUser } = useAuth()
+	const { canUsePermission } = useApps()
 	const storagePrefix = useMemo(() => `browser:${currentUser?.id ?? 'default'}`, [currentUser?.id])
+	const canUseNetwork = canUsePermission('browser', 'network')
 
 	const [lastUrl, setLastUrl] = usePersistentStore<string>(`${storagePrefix}:secure-last-url`, DEFAULT_SECURE_BROWSER_URL)
 	const [remoteStatus, setRemoteStatus] = useState<RemoteStatus>('checking')
@@ -53,6 +56,11 @@ export const BrowserApp: React.FC<{ windowId: string }> = () => {
 	}, [setLastUrl])
 
 	const runAction = useCallback(async (path: string, body?: Record<string, unknown>) => {
+		if (!canUseNetwork) {
+			setRemoteStatus('offline')
+			setStatusMessage('Permesso negato: network disabilitato per Browser')
+			return
+		}
 		setStatusMessage('Esecuzione comando browser remoto...')
 		try {
 			const payload = await fetchSecureBrowser(path, {
@@ -70,9 +78,14 @@ export const BrowserApp: React.FC<{ windowId: string }> = () => {
 			setRemoteStatus('offline')
 			setStatusMessage(String(error instanceof Error ? error.message : error))
 		}
-	}, [setLastUrl])
+	}, [canUseNetwork, setLastUrl])
 
 	useEffect(() => {
+		if (!canUseNetwork) {
+			setRemoteStatus('offline')
+			setStatusMessage('Permesso negato: network disabilitato per Browser')
+			return
+		}
 		if (hasOpenedDefaultRef.current) return
 		hasOpenedDefaultRef.current = true
 
@@ -80,9 +93,10 @@ export const BrowserApp: React.FC<{ windowId: string }> = () => {
 			await runAction('/secure-browser/open-default', { url: lastUrl || DEFAULT_SECURE_BROWSER_URL })
 			await syncCurrentUrl()
 		})()
-	}, [lastUrl, runAction, syncCurrentUrl])
+	}, [canUseNetwork, lastUrl, runAction, syncCurrentUrl])
 
 	useEffect(() => {
+		if (!canUseNetwork) return
 		let disposed = false
 
 		const checkRemote = async () => {
@@ -108,23 +122,25 @@ export const BrowserApp: React.FC<{ windowId: string }> = () => {
 			disposed = true
 			clearInterval(timer)
 		}
-	}, [])
+	}, [canUseNetwork])
 
 	return (
 		<div className="h-full w-full bg-[#0a0f1d]/95 border border-white/15 rounded-xl overflow-hidden text-white">
 			<div className="relative h-full w-full bg-black/20">
-				<iframe
-					src={REMOTE_BROWSER_URL}
-					title="Selenium Remote Browser"
-					className="absolute inset-0 w-full h-full"
-				/>
+				{canUseNetwork && (
+					<iframe
+						src={REMOTE_BROWSER_URL}
+						title="Selenium Remote Browser"
+						className="absolute inset-0 w-full h-full"
+					/>
+				)}
 
-				{remoteStatus !== 'online' && (
+				{(!canUseNetwork || remoteStatus !== 'online') && (
 					<div className="absolute inset-0 z-10 grid place-items-center bg-black/55 backdrop-blur-[1px] p-6 text-center">
 						<div className="space-y-2 max-w-xl">
-							<p className="text-base text-white/90">{remoteStatus === 'checking' ? 'Connessione al browser remoto...' : 'Browser remoto non raggiungibile'}</p>
+							<p className="text-base text-white/90">{!canUseNetwork ? 'Browser bloccato dalla policy' : remoteStatus === 'checking' ? 'Connessione al browser remoto...' : 'Browser remoto non raggiungibile'}</p>
 							<p className="text-xs text-white/65">{statusMessage || 'Controlla che il container Selenium sia attivo.'}</p>
-							<button onClick={() => void runAction('/secure-browser/open-default', { url: DEFAULT_SECURE_BROWSER_URL })} className="px-3 py-2 rounded-md bg-white/15 hover:bg-white/25 text-sm">
+							<button disabled={!canUseNetwork} onClick={() => void runAction('/secure-browser/open-default', { url: DEFAULT_SECURE_BROWSER_URL })} className="px-3 py-2 rounded-md bg-white/15 hover:bg-white/25 disabled:opacity-50 text-sm">
 								Riprova connessione
 							</button>
 						</div>

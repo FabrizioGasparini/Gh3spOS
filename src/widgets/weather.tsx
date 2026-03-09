@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { WidgetRenderProps } from '@/types'
 
 type WeatherState = {
   city: string;
@@ -20,7 +21,7 @@ const weatherCodeToText = (code: number) => {
   return "Variabile";
 };
 
-export const WeatherWidget = () => {
+export const WeatherWidget: React.FC<WidgetRenderProps> = ({ widgetSettings }) => {
   const [weather, setWeather] = useState<WeatherState>({
     city: "Rilevamento...",
     temperature: null,
@@ -71,12 +72,22 @@ export const WeatherWidget = () => {
     );
   }, []);
 
+  const unit = widgetSettings?.weatherUnit === 'f' ? 'f' : 'c'
+  const windUnit = widgetSettings?.weatherWindUnit === 'mph' ? 'mph' : 'kmh'
+  const temp = weather.temperature
+  const displayedTemp = temp === null
+    ? null
+    : (unit === 'f' ? Math.round((temp * 9) / 5 + 32) : Math.round(temp))
+  const displayedWind = weather.wind === null
+    ? null
+    : (windUnit === 'mph' ? Math.round(weather.wind * 0.621371) : Math.round(weather.wind))
+
   return (
     <div className="w-full h-full flex flex-col justify-between text-white font-sans p-4">
       <div className="text-lg font-semibold">🌤️ {weather.city}</div>
-      <div className="text-4xl">{weather.temperature !== null ? `${Math.round(weather.temperature)}°C` : "--"}</div>
+      <div className="text-4xl">{displayedTemp !== null ? `${displayedTemp}°${unit.toUpperCase()}` : "--"}</div>
       <div className="text-sm opacity-70">{weather.description}</div>
-      <div className="text-xs opacity-60">💧 {weather.humidity !== null ? `${weather.humidity}%` : "--"} · 🌬 {weather.wind !== null ? `${Math.round(weather.wind)} km/h` : "--"}</div>
+      <div className="text-xs opacity-60">💧 {weather.humidity !== null ? `${weather.humidity}%` : "--"} · 🌬 {displayedWind !== null ? `${displayedWind} ${windUnit === 'mph' ? 'mph' : 'km/h'}` : "--"}</div>
     </div>
   )
 }

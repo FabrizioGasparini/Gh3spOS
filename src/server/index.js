@@ -1015,46 +1015,119 @@ const server = app.listen(PORT, () => {
 const wss = new WebSocketServer({ server });
 
 wss.on("connection", (ws) => {
-  const ssh = new Client();
+  let ssh = null;
+  let shellStream = null;
 
-  ssh
-    .on("ready", () => {
-      console.log("✅ Connessione SSH riuscita");
+  const closeSsh = () => {
+    if (shellStream) {
+      try {
+        shellStream.end();
+      } catch {
+        // ignore shell stream close errors
+      }
+      shellStream = null;
+    }
+    if (ssh) {
+      try {
+        ssh.end();
+      } catch {
+        // ignore ssh close errors
+      }
+      ssh = null;
+    }
+  };
 
-      ssh.shell((err, stream) => {
-        if (err) return ws.send(`Errore: ${err.message}`);
+  const safeSend = (payload) => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify(payload));
+  };
 
-        // Dati da SSH → WebSocket
-        stream.on("data", (data) => {
-          ws.send(JSON.stringify({ type: "output", data: data.toString() }));
-        });
+  ws.on("message", (msg) => {
+    let parsed;
+    try {
+      parsed = JSON.parse(msg.toString());
+    } catch (err) {
+      console.error("❌ Errore parsing input:", err);
+      return;
+    }
 
-        // Dati da WebSocket → SSH
-        ws.on("message", (msg) => {
-          try {
-            const parsed = JSON.parse(msg.toString());
-            if (parsed.type === "input") {
-              stream.write(parsed.data); // Scrive solo il carattere
+    if (parsed?.type === "connect") {
+      const host = String(parsed.host || "").trim();
+      const username = String(parsed.username || "").trim();
+      const password = typeof parsed.password === "string" ? parsed.password : "";
+      const portRaw = Number.parseInt(String(parsed.port || 22), 10);
+      const port = Number.isFinite(portRaw) && portRaw > 0 ? portRaw : 22;
+
+      if (!host || !username) {
+        safeSend({ type: "status", message: "Parametri SSH mancanti (host/username)" });
+        return;
+      }
+
+      closeSsh();
+      ssh = new Client();
+
+      ssh
+        .on("ready", () => {
+          console.log(`✅ Connessione SSH riuscita (${username}@${host}:${port})`);
+          safeSend({ type: "status", message: `Connesso a ${username}@${host}:${port}` });
+
+          ssh.shell((err, stream) => {
+            if (err) {
+              safeSend({ type: "status", message: `Errore shell SSH: ${err.message}` });
+              return;
             }
-          } catch (err) {
-            console.error("❌ Errore parsing input:", err);
-          }
+
+            shellStream = stream;
+
+            stream.on("data", (data) => {
+              safeSend({ type: "output", data: data.toString() });
+            });
+
+            stream.on("close", () => {
+              shellStream = null;
+              safeSend({ type: "status", message: "Connessione SSH chiusa" });
+              closeSsh();
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.close();
+              }
+            });
+          });
+        })
+        .on("close", () => {
+          console.log("❌ Connessione SSH chiusa");
+          safeSend({ type: "status", message: "Connessione SSH chiusa" });
+          closeSsh();
+        })
+        .on("error", (err) => {
+          console.error("❗ Errore SSH:", err.message);
+          safeSend({ type: "status", message: `Errore SSH: ${err.message}` });
+          closeSsh();
+        })
+        .connect({
+          host,
+          port,
+          username,
+          password,
         });
-      });
-    })
-    .on("close", () => {
-      console.log("❌ Connessione SSH chiusa");
-      ws.close();
-    })
-    .on("error", (err) => {
-      console.error("❗ Errore SSH:", err.message);
-      ws.send(`Errore: ${err.message}`);
-      ws.close();
-    })
-    .connect({
-      host: "192.168.1.80",
-      port: 22,
-      username: "gaspa",
-      password: "2010081", 
-    });
+
+      return;
+    }
+
+    if (parsed?.type === "input") {
+      if (shellStream) {
+        shellStream.write(typeof parsed.data === "string" ? parsed.data : "");
+      }
+      return;
+    }
+
+    if (parsed?.type === "disconnect") {
+      closeSsh();
+      safeSend({ type: "status", message: "Disconnesso" });
+      return;
+    }
+  });
+
+  ws.on("close", () => {
+    closeSsh();
+  });
 });

@@ -17,6 +17,7 @@
         "preview": "vite preview"
     },
     "dependencies": {
+        "@monaco-editor/react": "^4.7.0",
         "@tailwindcss/vite": "^4.1.11",
         "body-parser": "^2.2.0",
         "clsx": "^2.1.1",
@@ -27,6 +28,7 @@
         "html2canvas-pro": "^1.5.11",
         "lucide-react": "^0.525.0",
         "mime-types": "^3.0.1",
+        "monaco-editor": "^0.55.1",
         "pdfjs-dist": "^5.3.31",
         "react": "^19.1.0",
         "react-doc-viewer": "^0.1.14",

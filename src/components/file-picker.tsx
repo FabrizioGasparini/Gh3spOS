@@ -407,6 +407,25 @@ export const FilePicker: React.FC<FilePickerProps> = ({ onSelected, selectParams
   };
   
   const filteredItems = items
+    .filter((item) => {
+      if (selectParams.allow === "file") {
+        if (item.type !== "file") return false
+        if (!selectParams.fileExtensions || selectParams.fileExtensions.length === 0) return true
+        const ext = item.name.split('.').pop()?.toLowerCase() || ''
+        const allowed = selectParams.fileExtensions.map((value) => value.toLowerCase())
+        return allowed.includes(ext)
+      }
+
+      if (selectParams.allow === "folder") {
+        return item.type === "folder"
+      }
+
+      if (selectParams.allow === "disk") {
+        return item.type === "disk"
+      }
+
+      return true
+    })
     .filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a: FileItem, b: FileItem) => {
       switch (filter.label) {

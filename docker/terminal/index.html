@@ -1,15 +1,38 @@
 <!doctype html>
 <html lang="en">
+
 <head>
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 	<title>Terminal Runtime</title>
 	<style>
-		html, body { margin: 0; width: 100%; height: 100%; background: #020617; color: #e2e8f0; font-family: Inter, Arial, sans-serif; }
-		iframe { width: 100%; height: 100%; border: 0; display: block; }
-		.msg { height: 100%; display: grid; place-items: center; text-align: center; padding: 24px; }
+		html,
+		body {
+			margin: 0;
+			width: 100%;
+			height: 100%;
+			background: #020617;
+			color: #e2e8f0;
+			font-family: Inter, Arial, sans-serif;
+		}
+
+		iframe {
+			width: 100%;
+			height: 100%;
+			border: 0;
+			display: block;
+		}
+
+		.msg {
+			height: 100%;
+			display: grid;
+			place-items: center;
+			text-align: center;
+			padding: 24px;
+		}
 	</style>
 </head>
+
 <body>
 	<div id="root" class="msg">Connecting runtime...</div>
 	<script>
@@ -28,11 +51,12 @@
 					iframe.src = target
 					root.replaceWith(iframe)
 					return
-				} catch {}
+				} catch { }
 			}
 
 			root.textContent = 'Runtime frontend non raggiungibile. Avvia `npm run dev`.'
 		})()
 	</script>
 </body>
+
 </html>

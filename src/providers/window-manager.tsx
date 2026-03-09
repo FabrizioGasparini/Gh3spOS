@@ -15,7 +15,7 @@ const getTopSafePercent = () => {
 
 type WindowManagerContextType = {
 	windows: WindowInstance[]
-	openWindow: (app: AppDefinition, id: string, params?: Record<string, WindowParamType>) => WindowInstance
+	openWindow: (app: AppDefinition, id: string, params?: Record<string, WindowParamType>) => WindowInstance | null
 	openGhostWindow: (title: string, params?: Record<string, WindowParamType>) => WindowInstance
 	closeWindow: (id: string) => void
 	minimizeWindow: (id: string) => void
@@ -72,6 +72,7 @@ export const WindowManagerProvider = ({ children }: { children: ReactNode }) => 
 	}, [apps])
 
 	const openWindow = (app: AppDefinition, appId: string, params: Record<string, WindowParamType> = {}) => {
+		if (!apps.has(appId)) return null
 		if(app.singleInstance && windows.some(w => w.appId === appId)) {
 			const existingWindow = windows.find(w => w.appId === appId)
 			if (existingWindow) {

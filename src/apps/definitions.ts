@@ -10,7 +10,9 @@ import { Terminal } from "@/apps/terminal/index";
 import { TaskManager } from "@/apps/task-manager";
 import { BrowserApp } from "@/apps/browser";
 import { AppStore } from "@/apps/app-store";
-//import { SSHConnect } from "@/apps/ssh-connect"
+import { VisualStudioCodeApp } from "@/apps/visual-studio-code";
+import { GlobalFilePickerApp } from "@/apps/global-file-picker";
+import { SSHConnect } from "@/apps/ssh-connect";
 
 export const apps: Map<string, AppDefinition> = new Map<string, AppDefinition>([
     [
@@ -116,11 +118,37 @@ export const apps: Map<string, AppDefinition> = new Map<string, AppDefinition>([
             ghost: true,
             defaultSize: { width: 30, height: 40 },
         },
-    ] /*,
-	['gh3connect', {
-		name: 'SSH Connect',
-		icon: 'dock-ssh.png',
-		component: SSHConnect,
-		isPinned: true
-	}]*/,
+    ],
+    [
+        "vs-code",
+        {
+            name: "Visual Studio Code",
+            icon: "dock-vscode.png",
+            component: VisualStudioCodeApp,
+            isPinned: true,
+            singleInstance: false,
+            defaultSize: { width: 85, height: 90 },
+        },
+    ],
+    [
+        "global-file-picker",
+        {
+            name: "File Picker",
+            icon: "default-icon.svg",
+            component: GlobalFilePickerApp,
+            isPinned: false,
+            ghost: true,
+            singleInstance: false,
+            defaultSize: { width: 55, height: 70 },
+        },
+    ],
+    [
+        "gh3connect",
+        {
+            name: "SSH Connect",
+            icon: "dock-ssh.png",
+            component: SSHConnect,
+            isPinned: true,
+        },
+    ],
 ]);

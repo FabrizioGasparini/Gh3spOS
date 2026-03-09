@@ -4,11 +4,9 @@ import type { WidgetDefinition } from "@/types";
 import { ClockWidget } from "./clock";
 import { WeatherWidget } from "./weather";
 import { TodoWidget } from "./todo";
-import { SystemInfoWidget } from "./system-info";
-import { NotesWidget } from "./notes";
-import { BatteryWidget } from "./battery";
-import { NetworkWidget } from "./network";
 import { QuickActionsWidget } from "./quick-actions";
+import { CalendarPlannerWidget } from "./calendar-planner";
+import { FocusTimerWidget } from "./focus-timer";
 
 export const widgets: Map<string, WidgetDefinition> = new Map<string, WidgetDefinition>([
     [
@@ -42,46 +40,6 @@ export const widgets: Map<string, WidgetDefinition> = new Map<string, WidgetDefi
         },
     ],
     [
-        "system-info",
-        {
-            name: "Info Sistema",
-            component: SystemInfoWidget,
-            defaultSize: { width: 3, height: 2 },
-            inStore: true,
-            storeDescription: "Mostra RAM, CPU, OS e uptime del sistema",
-        },
-    ],
-    [
-        "notes",
-        {
-            name: "Note Veloci",
-            component: NotesWidget,
-            defaultSize: { width: 3, height: 3 },
-            inStore: true,
-            storeDescription: "Blocco note veloce con salvataggio automatico",
-        },
-    ],
-    [
-        "battery",
-        {
-            name: "Batteria",
-            component: BatteryWidget,
-            defaultSize: { width: 2, height: 1 },
-            inStore: true,
-            storeDescription: "Mostra livello e stato della batteria",
-        },
-    ],
-    [
-        "network",
-        {
-            name: "Rete",
-            component: NetworkWidget,
-            defaultSize: { width: 2, height: 1 },
-            inStore: true,
-            storeDescription: "Mostra stato della connessione e ping",
-        },
-    ],
-    [
         "quick-actions",
         {
             name: "Quick Actions",
@@ -89,6 +47,26 @@ export const widgets: Map<string, WidgetDefinition> = new Map<string, WidgetDefi
             defaultSize: { width: 3, height: 2 },
             inStore: true,
             storeDescription: "Apri app e controlla il sistema al volo",
+        },
+    ],
+    [
+        "calendar-planner",
+        {
+            name: "Planner",
+            component: CalendarPlannerWidget,
+            defaultSize: { width: 4, height: 4 },
+            inStore: true,
+            storeDescription: "Calendario mensile con task rapidi ed eventi imminenti",
+        },
+    ],
+    [
+        "focus-timer",
+        {
+            name: "Focus Timer",
+            component: FocusTimerWidget,
+            defaultSize: { width: 3, height: 2 },
+            inStore: true,
+            storeDescription: "Pomodoro timer con preset, progress e conteggio sessioni",
         },
     ],
 ]);

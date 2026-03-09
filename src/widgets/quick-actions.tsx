@@ -4,10 +4,11 @@ import { useWindowManager } from '@/providers/window-manager'
 
 export const QuickActionsWidget: React.FC = () => {
 	const { open: openSpotlight } = useSpotlight()
-	const { apps } = useApps()
+	const { apps, canUsePermission } = useApps()
 	const { openWindow, windows, snappingEnabled, setSnappingEnabled } = useWindowManager()
 
 	const launch = (id: string) => {
+		if (!canUsePermission(id, 'launch')) return
 		const app = apps.get(id)
 		if (!app) return
 		openWindow(app, id)

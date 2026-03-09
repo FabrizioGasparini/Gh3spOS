@@ -11,6 +11,8 @@ type ResizeDirection = 'left' | 'right' | 'top' | 'bottom' | 'top-left' | 'top-r
 const SNAP_THRESHOLD = 50 //px
 const MENU_BAR_HEIGHT_PX = 36
 
+type SnapTarget = { maximize: boolean; bounds?: SnapBounds }
+
 
 export const Window = ({ window }: { window: WindowInstance }) => {
 	const { closeWindow, minimizeWindow, maximizeWindow, focusWindow, resizeWindow, moveWindow, getWindowComponent, snappingEnabled, snapWindow } = useWindowManager()
@@ -21,30 +23,68 @@ export const Window = ({ window }: { window: WindowInstance }) => {
 
 	const [isClosing, setIsClosing] = useState(false);
 	const [isMinimizing, setIsMinimizing] = useState(false);
+	const [isOpening, setIsOpening] = useState(!settings.reduceMotion);
+	const [isNearTopEdge, setIsNearTopEdge] = useState(false)
 	
 
 	const ref = useRef<HTMLDivElement>(null)
 	const isDragging = useRef(false)
 	const offset = useRef({ x: 0, y: 0 })
 	const getTopSafePercent = (screenHeight: number) => (MENU_BAR_HEIGHT_PX / screenHeight) * 100
+	const clampWindowPosition = (x: number, y: number, screenHeight: number) => {
+		const topSafePercent = getTopSafePercent(screenHeight)
+		return {
+			x: Math.max(0, Math.min(x, 100 - window.size.width)),
+			y: Math.max(topSafePercent, Math.min(y, 100 - window.size.height)),
+		}
+	}
 
-	const getSnapTarget = (x: number, y: number, screenWidth: number, screenHeight: number): { maximize: boolean; bounds?: SnapBounds } | null => {
+	const getSnapTarget = (x: number, y: number, screenWidth: number, screenHeight: number): SnapTarget | null => {
 		const topSafePercent = getTopSafePercent(screenHeight)
 		const availableHeight = 100 - topSafePercent
+		const edgeX = Math.max(SNAP_THRESHOLD, Math.round(screenWidth * 0.06))
+		const edgeY = Math.max(SNAP_THRESHOLD, Math.round(screenHeight * 0.08))
+		const topSnapLimit = MENU_BAR_HEIGHT_PX + edgeY
 
-		if (x < SNAP_THRESHOLD && y < SNAP_THRESHOLD + MENU_BAR_HEIGHT_PX) return { maximize: false, bounds: { width: 50, height: availableHeight / 2, x: 0, y: topSafePercent } }
-		if (x > screenWidth - SNAP_THRESHOLD && y < SNAP_THRESHOLD + MENU_BAR_HEIGHT_PX) return { maximize: false, bounds: { width: 50, height: availableHeight / 2, x: 50, y: topSafePercent } }
-		if (x < SNAP_THRESHOLD && y > screenHeight - SNAP_THRESHOLD) return { maximize: false, bounds: { width: 50, height: availableHeight / 2, x: 0, y: topSafePercent + availableHeight / 2 } }
-		if (x > screenWidth - SNAP_THRESHOLD && y > screenHeight - SNAP_THRESHOLD) return { maximize: false, bounds: { width: 50, height: availableHeight / 2, x: 50, y: topSafePercent + availableHeight / 2 } }
-		if (x < SNAP_THRESHOLD) return { maximize: false, bounds: { width: 50, height: availableHeight, x: 0, y: topSafePercent } }
-		if (x > screenWidth - SNAP_THRESHOLD) return { maximize: false, bounds: { width: 50, height: availableHeight, x: 50, y: topSafePercent } }
-		if (y < SNAP_THRESHOLD + MENU_BAR_HEIGHT_PX) return { maximize: true }
+		const nearLeft = x <= edgeX
+		const nearRight = x >= (screenWidth - edgeX)
+		const nearTop = y <= topSnapLimit
+		const nearBottom = y >= (screenHeight - edgeY)
+
+		if (nearLeft && nearTop) return { maximize: false, bounds: { width: 50, height: availableHeight / 2, x: 0, y: topSafePercent } }
+		if (nearRight && nearTop) return { maximize: false, bounds: { width: 50, height: availableHeight / 2, x: 50, y: topSafePercent } }
+		if (nearLeft && nearBottom) return { maximize: false, bounds: { width: 50, height: availableHeight / 2, x: 0, y: topSafePercent + availableHeight / 2 } }
+		if (nearRight && nearBottom) return { maximize: false, bounds: { width: 50, height: availableHeight / 2, x: 50, y: topSafePercent + availableHeight / 2 } }
+
+		if (nearLeft) return { maximize: false, bounds: { width: 50, height: availableHeight, x: 0, y: topSafePercent } }
+		if (nearRight) return { maximize: false, bounds: { width: 50, height: availableHeight, x: 50, y: topSafePercent } }
+
+		const isCenterX = x > screenWidth * 0.3 && x < screenWidth * 0.7
+		if (nearTop && isCenterX) return { maximize: true }
+		if (nearBottom && isCenterX) return { maximize: false, bounds: { width: 100, height: availableHeight / 2, x: 0, y: topSafePercent + availableHeight / 2 } }
+
+		if (nearTop) return { maximize: true }
 		return null
 	}
 
 	useEffect(() => {
 		setPreviewRef(window.id, ref.current)
 	}, [window.id, setPreviewRef])
+
+	useEffect(() => {
+		if (!window.isMaximized || window.ghost) {
+			setIsNearTopEdge(false)
+			return
+		}
+
+		const threshold = MENU_BAR_HEIGHT_PX + 24
+		const onMove = (event: MouseEvent) => {
+			setIsNearTopEdge(event.clientY <= threshold)
+		}
+
+		globalThis.window.addEventListener('mousemove', onMove)
+		return () => globalThis.window.removeEventListener('mousemove', onMove)
+	}, [window.ghost, window.isMaximized])
 
 	const onPointerDown = (e: React.PointerEvent) => {
 		isDragging.current = true
@@ -80,22 +120,16 @@ export const Window = ({ window }: { window: WindowInstance }) => {
 			maximizeWindow(window.id, false)
 			snapWindow(window.id, false)
 			setSnappingPosition(null)
-			
-			const x = (e.clientX / screenWidth * 100) - (window.size.width * e.clientX / screenWidth)
-			const y = (e.clientY) / screenHeight * 100
-			moveWindow(window.id, {
-				x: Math.max(0, Math.min(x, 100)),
-				y: Math.max(topSafePercent, Math.min(y, 100)),
-			})
 		}
-		else
-			moveWindow(window.id, {
-				x: Math.max(0, Math.min(xPercent, 100)),
-				y: Math.max(topSafePercent, Math.min(yPercent, 100)),
-			})
 
+		const clamped = clampWindowPosition(xPercent, yPercent, screenHeight)
+		moveWindow(window.id, clamped)
 
-		
+		if (!snappingEnabled) {
+			setSnappingPosition(null)
+			return
+		}
+
 		const target = getSnapTarget(e.clientX, e.clientY, screenWidth, screenHeight)
 		setSnappingPosition(target?.maximize ? { width: 100, height: 100 - topSafePercent, x: 0, y: topSafePercent } : target?.bounds ?? null)
 	}
@@ -246,6 +280,7 @@ export const Window = ({ window }: { window: WindowInstance }) => {
 	const element = React.createElement(component, window.params);
 	const menuBarPercent = getTopSafePercent(document.body.clientHeight)
 	const isHeaderOverlay = window.isMaximized && !window.ghost
+	const shouldShowHeaderOverlay = isHeaderOverlay && isNearTopEdge
 
 	return (
 		<>	
@@ -255,8 +290,9 @@ export const Window = ({ window }: { window: WindowInstance }) => {
 			<div
 				ref={ref}
 				className={clsx(
-					'absolute ',
+					'absolute pointer-events-auto',
 					'group/window overflow-hidden flex flex-col transition-[box-shadow,filter,border-color,background-color,opacity,transform] border',
+					isOpening && !isClosing && !isMinimizing ? 'animate-open-window' : '',
 					settings.reduceMotion ? 'duration-0' : 'duration-200',
 					window.isFocused
 						? (settings.reduceTransparency
@@ -285,6 +321,7 @@ export const Window = ({ window }: { window: WindowInstance }) => {
 				role="dialog"
 				aria-label={window.title}
 				onAnimationEnd={(e) => {
+					if (e.animationName === 'open-window') setIsOpening(false)
 					if (e.animationName === 'close-window') onCloseAnimationEnd();
 					if (e.animationName === 'minimize-window') onMinimizeAnimationEnd();
 				}}
@@ -297,7 +334,10 @@ export const Window = ({ window }: { window: WindowInstance }) => {
 					className={clsx(
 						"flex items-center justify-between px-3 py-1.5 cursor-move select-none border-b",
 						window.isFocused ? "bg-black/25 border-white/15" : "bg-black/28 border-white/10",
-						isHeaderOverlay && "absolute left-0 right-0 top-0 z-30 opacity-0 -translate-y-2 pointer-events-none transition-all duration-200 peer-hover/titlebar-hotspot:opacity-100 peer-hover/titlebar-hotspot:translate-y-0 peer-hover/titlebar-hotspot:pointer-events-auto hover:opacity-100 hover:translate-y-0 hover:pointer-events-auto group-focus-within/window:opacity-100 group-focus-within/window:translate-y-0 group-focus-within/window:pointer-events-auto"
+						isHeaderOverlay && "absolute left-0 right-0 top-0 z-30 transition-all duration-200",
+						isHeaderOverlay && (shouldShowHeaderOverlay
+							? 'opacity-100 translate-y-0 pointer-events-auto'
+							: 'opacity-0 -translate-y-2 pointer-events-none')
 					)}
 					onPointerDown={onPointerDown}
 					>
@@ -311,19 +351,22 @@ export const Window = ({ window }: { window: WindowInstance }) => {
 						</span>
 					</div>
 			
-					<div className="flex space-x-1.5 ml-3">
+					<div className="flex space-x-1.5 ml-3" onPointerDown={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
 					<button
 						aria-label="Massimizza"
 						className="w-3.5 h-3.5 rounded-full bg-emerald-500/95 hover:bg-emerald-400 transition-all duration-150 shadow-[0_0_10px_rgba(16,185,129,0.45)]"
+						onPointerDown={(e) => e.stopPropagation()}
 						onClick={handleMaximizeClick}
 					/>
 					<button
 						aria-label="Minimizza"
+						onPointerDown={(e) => e.stopPropagation()}
 						onClick={handleMinimizeClick}
 						className="w-3.5 h-3.5 rounded-full bg-amber-400/95 hover:bg-amber-300 transition-all duration-150 shadow-[0_0_10px_rgba(250,204,21,0.45)]"
 					/>
 					<button
 						aria-label="Chiudi"
+						onPointerDown={(e) => e.stopPropagation()}
 						onClick={handleCloseClick}
 						className="w-3.5 h-3.5 rounded-full bg-rose-500/95 hover:bg-rose-400 transition-all duration-150 shadow-[0_0_10px_rgba(244,63,94,0.45)]"
 					/>
@@ -339,9 +382,10 @@ export const Window = ({ window }: { window: WindowInstance }) => {
 					</span>
 				</div>
 		
-				<div className="flex space-x-1.5 ">
+				<div className="flex space-x-1.5 " onPointerDown={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
 				<button
 					aria-label="Chiudi"
+					onPointerDown={(e) => e.stopPropagation()}
 					onClick={handleCloseClick}
 					className="w-3.5 h-3.5 rounded-full bg-rose-500/95 hover:bg-rose-400 transition-all duration-150"
 				/>

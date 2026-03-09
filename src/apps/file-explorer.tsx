@@ -37,7 +37,7 @@ type FileExplorerProps = {
 const BASE_URL = "https://www.gh3sp.com/cloud/api";
 
 export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
-  const { apps } = useApps()
+  const { apps, canUsePermission } = useApps()
   const [items, setItems] = useState<FileItem[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedItem, setSelectedItem] = useState<FileItem | null>(null)
@@ -80,6 +80,22 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
   const { openWindow, windows } = useWindowManager()
   const { showModal } = useModal()
 
+  const ensureExplorerPermission = (action: string) => {
+    if (!canUsePermission('file-explorer', 'filesystem')) {
+      const message = `Permesso negato (${action}): filesystem disabilitato per File Explorer.`
+      setError(message)
+      showToast(message)
+      return false
+    }
+    if (!canUsePermission('file-explorer', 'network')) {
+      const message = `Permesso negato (${action}): network disabilitato per File Explorer.`
+      setError(message)
+      showToast(message)
+      return false
+    }
+    return true
+  }
+
   // ===== Use Effects ===== \\
   useEffect(() => {
     fetchDrives()
@@ -106,6 +122,11 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
   }
 
   const fetchData = () => {
+    if (!ensureExplorerPermission('fetchData')) {
+      setItems([])
+      setLoading(false)
+      return
+    }
     setLoading(true);
     setError(null);
 
@@ -169,6 +190,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
 
   // ===== File Functions ===== \\
   const openFile = async (file: FileItem) => {
+    if (!ensureExplorerPermission('openFile')) return
     const filePath = path + "/" + file.name;
     const parts = file.name.split(".");
     const extension = parts.length > 1 ? parts.pop()?.toLowerCase() : "";
@@ -236,6 +258,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
   }
 
   const handleRename = async (item: FileItem) => {
+    if (!ensureExplorerPermission('rename')) return
     showModal({
       type: "confirm",
       title: "Rinomina file",
@@ -261,6 +284,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
   }
   
   const handleDelete = async (item: FileItem) => {
+    if (!ensureExplorerPermission('delete')) return
     showModal({
       type: "confirm",
       title: "Elimina file",
@@ -284,6 +308,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
   }
   
   const handleCopy = async (item: FileItem) => {
+    if (!ensureExplorerPermission('copy')) return
     const destination = prompt("Copia in:", path)
     if (!destination) return
     try {
@@ -303,6 +328,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
   }
   
   const handleMove = async (item: FileItem) => {
+    if (!ensureExplorerPermission('move')) return
     const destination = prompt("Sposta in:", path)
     if (!destination) return
     try {
@@ -322,6 +348,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
   }
 
   const handleCreateFolder = async () => {
+    if (!ensureExplorerPermission('createFolder')) return
   showModal({
     type: "confirm",
     title: "Crea nuova cartella",
@@ -346,6 +373,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
 };
 
 const handleCreateFile = async () => {
+  if (!ensureExplorerPermission('createFile')) return
   showModal({
     type: "confirm",
     title: "Crea nuovo file",
@@ -609,6 +637,7 @@ const handleCreateFile = async () => {
                 onDragLeave={() => setHoveredPath(null)}
                 onDrop={async () => {
                   if (!draggedItem) return
+                  if (!ensureExplorerPermission('dragMove')) return
               
                   const sourcePath = `${path}/${draggedItem.name}`
                   const destinationPath = `${subPath}/${draggedItem.name}`
@@ -847,6 +876,7 @@ const handleCreateFile = async () => {
           onDragLeave={() => setHoveredPath(null)}
           onDrop={async () => {
             if (!draggedItem || draggedItem.name === item.name || item.type !== 'folder') return
+            if (!ensureExplorerPermission('dragMove')) return
 
             const sourcePath = `${path}/${draggedItem.name}`
             const destinationPath = `${path}/${item.name}/${draggedItem.name}`
@@ -895,6 +925,7 @@ onDragOver={(e) => {
 onDragLeave={() => setHoveredPath(null)}
 onDrop={async () => {
   if (!draggedItem || draggedItem.name === item.name || item.type !== 'folder') return
+  if (!ensureExplorerPermission('dragMove')) return
 
   const sourcePath = `${path}/${draggedItem.name}`
   const destinationPath = `${path}/${item.name}/${draggedItem.name}`

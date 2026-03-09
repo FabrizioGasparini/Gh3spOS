@@ -3,6 +3,7 @@ import { Bell, Brush, LayoutTemplate, MonitorSmartphone, Search, SlidersHorizont
 import { usePersistentStore } from '@/providers/persistent-store'
 import { useAuth } from '@/providers/auth'
 import { useNotifications } from '@/providers/notifications'
+import { useApps, type AppPermissionKey } from '@/providers/apps'
 import {
   ACCENT_COLOR_VALUES,
   DEFAULT_DESKTOP_SETTINGS,
@@ -73,6 +74,7 @@ const SUBTAB_ITEMS: Record<SettingsSection, Array<{ id: string; label: string }>
   system: [
     { id: 'regional', label: 'Lingua e Regione' },
     { id: 'shortcuts', label: 'Shortcut' },
+    { id: 'permissions', label: 'Permessi app' },
     { id: 'maintenance', label: 'Manutenzione' },
   ],
 }
@@ -90,6 +92,8 @@ const DEFAULT_SUBTABS: SubTabMap = {
 const SETTINGS_SEARCH_INDEX: SettingsSearchItem[] = [
   { id: 'themeMode', label: 'Modalità interfaccia', section: 'appearance', subtab: 'theme', keywords: 'tema dark light auto aspetto' },
   { id: 'accentColor', label: 'Colore accento', section: 'appearance', subtab: 'theme', keywords: 'colore accento blu viola verde arancione rosa' },
+  { id: 'themeEngineTimeAwareAuto', label: 'Auto tema in base all\'orario', section: 'appearance', subtab: 'theme', keywords: 'tema auto orario giorno notte' },
+  { id: 'themeEngineDynamicAccent', label: 'Accento dinamico', section: 'appearance', subtab: 'theme', keywords: 'accento dinamico theme engine' },
   { id: 'reduceTransparency', label: 'Riduci trasparenza', section: 'appearance', subtab: 'effects', keywords: 'accessibilità effetti trasparenza' },
   { id: 'reduceMotion', label: 'Riduci animazioni', section: 'appearance', subtab: 'effects', keywords: 'accessibilità motion animazioni' },
   { id: 'wallpaperOverlay', label: 'Intensità overlay wallpaper', section: 'appearance', subtab: 'effects', keywords: 'overlay wallpaper sfondo' },
@@ -124,6 +128,7 @@ const SETTINGS_SEARCH_INDEX: SettingsSearchItem[] = [
   { id: 'language', label: 'Lingua e regione', section: 'system', subtab: 'regional', keywords: 'lingua regione locale' },
   { id: 'spotlightEnabled', label: 'Abilita Spotlight', section: 'system', subtab: 'shortcuts', keywords: 'spotlight abilita' },
   { id: 'spotlightShortcut', label: 'Scorciatoia Spotlight', section: 'system', subtab: 'shortcuts', keywords: 'spotlight shortcut cmd ctrl alt space' },
+  { id: 'permissions', label: 'Permessi applicazioni', section: 'system', subtab: 'permissions', keywords: 'permessi app sicurezza launch rete file ssh notifiche' },
   { id: 'maintenance', label: 'Ripristina impostazioni', section: 'system', subtab: 'maintenance', keywords: 'ripristina reset manutenzione' },
   { id: 'usersCurrent', label: 'Utente corrente', section: 'users', subtab: 'accounts', keywords: 'utente account corrente' },
   { id: 'usersList', label: 'Utenti disponibili', section: 'users', subtab: 'accounts', keywords: 'utenti disponibili lista' },
@@ -204,6 +209,7 @@ export const Settings: React.FC<{ windowId: string }> = () => {
   const [rawSettings, setSettings] = usePersistentStore<DesktopSettings>('gh3sp:settings', DEFAULT_DESKTOP_SETTINGS)
   const { users, currentUser, isAdmin, createUser } = useAuth()
   const { notify } = useNotifications()
+  const { catalog, permissionKeys, getPermission, canUsePermission, setPermission, resetPermissions } = useApps()
 
   const settings = useMemo(() => resolveDesktopSettings(rawSettings), [rawSettings])
   const sectionTitle = useMemo(() => SECTION_ITEMS.find((item) => item.id === activeSection)?.label ?? 'Impostazioni', [activeSection])
@@ -273,7 +279,16 @@ export const Settings: React.FC<{ windowId: string }> = () => {
 
   const sectionCardClass = 'rounded-2xl border border-white/10 bg-white/[0.03] p-4'
 
+  const permissionLabels: Record<AppPermissionKey, string> = {
+    launch: 'Avvio app',
+    filesystem: 'File system',
+    network: 'Rete',
+    ssh: 'SSH',
+    notifications: 'Notifiche',
+  }
+
   const sendTestNotification = (type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+    if (!canUsePermission('settings', 'notifications')) return
     const time = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
     notify(`Notifica di test (${type}) • ${time}`, type)
   }
@@ -420,6 +435,21 @@ export const Settings: React.FC<{ windowId: string }> = () => {
                   </label>
                 </div>
               </div>
+
+              <ToggleRow
+                label="Auto tema in base all'orario"
+                description="Con tema Auto, usa giorno/notte invece del tema di sistema"
+                checked={settings.themeEngineTimeAwareAuto}
+                onChange={(v) => updateSetting('themeEngineTimeAwareAuto', v)}
+                accentColor={accentColor}
+              />
+              <ToggleRow
+                label="Accento dinamico"
+                description="Adatta intensità dell'accento in base alla fase giorno/notte"
+                checked={settings.themeEngineDynamicAccent}
+                onChange={(v) => updateSetting('themeEngineDynamicAccent', v)}
+                accentColor={accentColor}
+              />
             </div>
           )}
 
@@ -675,6 +705,56 @@ export const Settings: React.FC<{ windowId: string }> = () => {
                     <option key={shortcut} value={shortcut} className="bg-slate-900">{SYSTEM_SETTINGS_LABELS.spotlightShortcut[shortcut]}</option>
                   ))}
                 </select>
+              </div>
+            </div>
+          )}
+
+          {!normalizedQuery && activeSection === 'system' && currentSubTab === 'permissions' && (
+            <div className="space-y-3">
+              <div className={sectionCardClass}>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold">Permission System</h3>
+                    <p className="text-xs text-white/60 mt-1">Controlla i permessi runtime per ogni applicazione.</p>
+                  </div>
+                  <button
+                    onClick={resetPermissions}
+                    className="rounded-lg border border-white/15 bg-white/10 hover:bg-white/15 px-3 py-1.5 text-xs"
+                  >
+                    Ripristina policy
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {catalog.map((item) => (
+                  <div key={item.id} className={sectionCardClass}>
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <div>
+                        <p className="text-sm font-semibold text-white/90">{item.definition.name}</p>
+                        <p className="text-[11px] text-white/55">{item.id}</p>
+                      </div>
+                    </div>
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {permissionKeys.map((permission) => {
+                        const current = getPermission(item.id, permission)
+                        return (
+                          <div key={`${item.id}:${permission}`} className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-2">
+                            <p className="text-[11px] text-white/65 mb-1">{permissionLabels[permission]}</p>
+                            <select
+                              value={current}
+                              onChange={(event) => setPermission(item.id, permission, event.target.value as 'allow' | 'deny')}
+                              className="w-full rounded-md border border-white/10 bg-white/10 px-2 py-1.5 text-xs outline-none"
+                            >
+                              <option value="allow" className="bg-slate-900">Allow</option>
+                              <option value="deny" className="bg-slate-900">Deny</option>
+                            </select>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

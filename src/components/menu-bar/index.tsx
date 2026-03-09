@@ -7,9 +7,10 @@ import { usePersistentStore } from '@/providers/persistent-store'
 import { DEFAULT_DESKTOP_SETTINGS, resolveDesktopSettings, type DesktopSettings } from '@/config/system-settings'
 import { useNotifications } from '@/providers/notifications'
 import { Bell, Lock, Moon, Power, Search, Settings2, Shield, CheckCheck, Trash2 } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
 
 export const MenuBar = () => {
-	const { apps } = useApps()
+	const { apps, canUsePermission } = useApps()
 	const { currentUser, logout } = useAuth()
 	const { notifications, unreadCount, markAsRead, markAllAsRead, clearNotifications, removeNotification } = useNotifications()
 	const [storedSettings, setStoredSettings] = usePersistentStore<DesktopSettings>('gh3sp:settings', DEFAULT_DESKTOP_SETTINGS)
@@ -21,6 +22,7 @@ export const MenuBar = () => {
 	const [isAppMenuOpen, setAppMenuOpen] = useState(false)
 	const [isUserMenuOpen, setUserMenuOpen] = useState(false)
 	const [isNotificationsOpen, setNotificationsOpen] = useState(false)
+	const [isClockMenuOpen, setClockMenuOpen] = useState(false)
 	const menuRef = useRef<HTMLDivElement>(null)
 
 	useEffect(() => {
@@ -35,6 +37,7 @@ export const MenuBar = () => {
 				setAppMenuOpen(false)
 				setUserMenuOpen(false)
 				setNotificationsOpen(false)
+				setClockMenuOpen(false)
 			}
 		}
 
@@ -44,8 +47,10 @@ export const MenuBar = () => {
 
 	const focusedWindow = useMemo(() => windows.find((w) => w.isFocused), [windows])
 	const focusedApp = focusedWindow ? apps.get(focusedWindow.appId) : null
-
 	const openById = (id: string) => {
+		if (!canUsePermission(id, 'launch')) {
+			return
+		}
 		const app = apps.get(id)
 		if (!app) return
 
@@ -138,9 +143,29 @@ export const MenuBar = () => {
 		},
 	} as const
 
+	const closeAllMenus = () => {
+		setAppleMenuOpen(false)
+		setAppMenuOpen(false)
+		setUserMenuOpen(false)
+		setNotificationsOpen(false)
+		setClockMenuOpen(false)
+	}
+
+	const panelTransition = desktopSettings.reduceMotion
+		? { duration: 0 }
+		: ({ type: 'spring', stiffness: 380, damping: 30, mass: 0.85 } as const)
+
 	return (
 		<header ref={menuRef} className={`absolute top-0 left-0 right-0 z-[110] ${menuBarCompact ? 'h-8' : 'h-9'} px-3 flex items-center justify-between border-b border-white/10 bg-black/25 backdrop-blur-2xl text-white select-none`}>
-			<div className="flex items-center gap-2 min-w-0 text-[13px]">
+			<motion.div
+				className="pointer-events-none absolute inset-0"
+				animate={{ opacity: [0.28, 0.45, 0.28] }}
+				transition={{ duration: 7.5, repeat: Number.POSITIVE_INFINITY, ease: 'easeInOut' }}
+				style={{
+					background: 'linear-gradient(90deg, rgba(59,130,246,0.10) 0%, rgba(168,85,247,0.08) 40%, rgba(16,185,129,0.10) 100%)',
+				}}
+			/>
+			<div className="relative z-10 flex items-center gap-2 min-w-0 text-[13px]">
 				<button
 					onClick={() => {
 						setAppleMenuOpen((v) => !v)
@@ -148,7 +173,7 @@ export const MenuBar = () => {
 					}}
 					className="text-base leading-none px-2 py-1 rounded-md hover:bg-white/15 transition"
 				>
-					
+					G
 				</button>
 
 				{desktopSettings.menuBarShowFocusedApp && (
@@ -159,52 +184,54 @@ export const MenuBar = () => {
 							setAppleMenuOpen(false)
 						}}
 						disabled={!focusedWindow}
-						className="text-xs px-2 py-1 rounded-md hover:bg-white/15 disabled:opacity-50 disabled:hover:bg-transparent transition"
+						className="text-xs px-2 py-1 rounded-md hover:bg-white/15 disabled:opacity-50 disabled:hover:bg-transparent transition inline-flex items-center gap-1"
 					>
 						{focusedApp?.name ?? 'Desktop'}
 					</button>
 				)}
 
+				<AnimatePresence>
 				{isAppleMenuOpen && (
-					<div className="absolute top-10 left-3 w-56 rounded-xl border border-white/20 bg-black/70 backdrop-blur-xl p-1 shadow-2xl">
+					<motion.div className="absolute top-10 left-3 w-56 rounded-xl border border-white/20 bg-black/70 backdrop-blur-xl p-1 shadow-2xl" initial={{ opacity: 0, scale: 0.92, y: -8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -6 }} transition={panelTransition} style={{ transformOrigin: 'top left' }}>
 						<button onClick={() => { open(); setAppleMenuOpen(false) }} className="w-full text-left px-3 py-2 rounded-md hover:bg-white/15 text-sm">Apri Spotlight</button>
 						<button onClick={() => { openById('terminal'); setAppleMenuOpen(false) }} className="w-full text-left px-3 py-2 rounded-md hover:bg-white/15 text-sm">Apri Terminal</button>
 						<button onClick={() => { openById('settings'); setAppleMenuOpen(false) }} className="w-full text-left px-3 py-2 rounded-md hover:bg-white/15 text-sm">Apri Impostazioni</button>
 						<div className="my-1 h-px bg-white/15" />
 						<button onClick={closeAllWindows} className="w-full text-left px-3 py-2 rounded-md hover:bg-white/15 text-sm">Chiudi tutte le finestre</button>
-					</div>
+					</motion.div>
 				)}
+				</AnimatePresence>
 
+				<AnimatePresence>
 				{isAppMenuOpen && focusedWindow && (
-					<div className="absolute top-10 left-20 w-56 rounded-xl border border-white/20 bg-black/70 backdrop-blur-xl p-1 shadow-2xl">
+					<motion.div className="absolute top-10 left-20 w-56 rounded-xl border border-white/20 bg-black/70 backdrop-blur-xl p-1 shadow-2xl" initial={{ opacity: 0, scale: 0.92, y: -8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -6 }} transition={panelTransition} style={{ transformOrigin: 'top left' }}>
 						<button onClick={() => { focusWindow(focusedWindow.id, true); setAppMenuOpen(false) }} className="w-full text-left px-3 py-2 rounded-md hover:bg-white/15 text-sm">Porta in primo piano</button>
 						<button onClick={minimizeFocused} className="w-full text-left px-3 py-2 rounded-md hover:bg-white/15 text-sm">Minimizza finestra</button>
 						<button onClick={closeFocused} className="w-full text-left px-3 py-2 rounded-md hover:bg-white/15 text-sm">Chiudi finestra</button>
-					</div>
+					</motion.div>
 				)}
+				</AnimatePresence>
 			</div>
 
-			<div className="flex items-center gap-2 text-xs">
-				{desktopSettings.menuBarShowFocusedApp && <span className="hidden lg:inline truncate max-w-[32vw] opacity-80">{focusedWindow?.title ?? 'Desktop'}</span>}
+			<div className="relative z-10 flex items-center gap-2 text-xs">
 			
-				{desktopSettings.menuBarShowFocusedApp && <span className="w-0.5 h-0.5 ml-2 rounded-full bg-white/70"></span>}
 				{desktopSettings.doNotDisturb ? (
-					<button className="inline-flex items-center gap-1 rounded-full border border-violet-300/40 bg-violet-500/20 px-2 py-0.5 text-[10px] text-violet-100 hover:bg-violet-500/30 transition" title="Disattiva Non disturbare" onClick={toggleDoNotDisturb}>
+					<motion.button className="inline-flex items-center gap-1 rounded-full border border-violet-300/40 bg-violet-500/20 px-2 py-0.5 text-[10px] text-violet-100 hover:bg-violet-500/30 transition" title="Disattiva Non disturbare" onClick={toggleDoNotDisturb} animate={{ boxShadow: ['0 0 0 rgba(139,92,246,0)', '0 0 16px rgba(139,92,246,0.35)', '0 0 0 rgba(139,92,246,0)'] }} transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY, ease: 'easeInOut' }}>
 						<Moon className="h-3.5 w-3.5" /> N.D.
-					</button>
-				) : <button className="items-center gap-1 grid place-items-center rounded-full relative h-6 w-6 text-[10px] text-white/20 hover:bg-white/10 transition" title="Attiva Non disturbare" onClick={toggleDoNotDisturb}>
+					</motion.button>
+				) : <motion.button className="items-center gap-1 grid place-items-center rounded-full relative h-6 w-6 text-[10px] text-white/20 hover:bg-white/10 transition" title="Attiva Non disturbare" onClick={toggleDoNotDisturb} whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.94 }}>
 						<Moon className="h-3.5 w-3.5" />
-					</button>}
+					</motion.button>}
 				<div className="relative">
-					<button
+					<motion.button
 						onClick={() => {
+							closeAllMenus()
 							setNotificationsOpen((v) => !v)
-							setAppleMenuOpen(false)
-							setAppMenuOpen(false)
-							setUserMenuOpen(false)
 						}}
 						className="relative h-6 w-6 grid place-items-center rounded-full hover:bg-white/15 transition"
 						aria-label="Apri centro notifiche"
+						whileHover={{ scale: 1.08 }}
+						whileTap={{ scale: 0.95 }}
 					>
 						<Bell className="w-3.5 h-3.5" />
 						{desktopSettings.notificationCenterShowBadge && unreadCount > 0 && (
@@ -212,9 +239,10 @@ export const MenuBar = () => {
 								{unreadCount > 99 ? '99+' : unreadCount}
 							</span>
 						)}
-					</button>
+					</motion.button>
+					<AnimatePresence>
 					{isNotificationsOpen && (
-						<div className="absolute right-0 mt-2 w-[23rem] rounded-2xl border border-white/25 bg-black/82 backdrop-blur-2xl p-2 shadow-2xl">
+						<motion.div className="absolute right-0 mt-2 w-[23rem] rounded-2xl border border-white/25 bg-black/82 backdrop-blur-2xl p-2 shadow-2xl" initial={{ opacity: 0, y: -8, scale: 0.92 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.95 }} transition={panelTransition} style={{ transformOrigin: 'top right' }}>
 							<div className="flex items-center justify-between gap-2 px-2 py-1">
 								<div>
 									<p className="text-[11px] uppercase tracking-wider text-white/50">Notifiche</p>
@@ -246,10 +274,13 @@ export const MenuBar = () => {
 								{regularNotifications.length > 0 && (
 									<div className="space-y-1">
 										<p className="px-2 text-[10px] uppercase tracking-wider text-white/45">Recenti</p>
-										{regularNotifications.map((item) => (
-											<div
+										{regularNotifications.map((item, index) => (
+											<motion.div
 												key={item.id}
 												className={`rounded-lg border-l-[3px] px-2.5 ${desktopSettings.notificationCenterCompact ? 'py-1.5' : 'py-2.5'} ${desktopSettings.notificationCenterAccentColors ? (item.isRead ? notificationTypeStyles[item.type].soft : notificationTypeStyles[item.type].strong) : (item.isRead ? 'border-white/10 bg-white/[0.03]' : 'border-white/25 bg-white/[0.06]')}`}
+												initial={{ opacity: 0, x: 8 }}
+												animate={{ opacity: 1, x: 0 }}
+												transition={{ duration: 0.15, delay: Math.min(index * 0.03, 0.18) }}
 											>
 												<button
 													onClick={() => markAsRead(item.id)}
@@ -266,7 +297,7 @@ export const MenuBar = () => {
 														Rimuovi
 													</button>
 												</div>
-											</div>
+											</motion.div>
 										))}
 									</div>
 								)}
@@ -274,10 +305,13 @@ export const MenuBar = () => {
 								{dndNotifications.length > 0 && (
 									<div className="space-y-1">
 										<p className="px-2 text-[10px] uppercase tracking-wider text-violet-200/85">N.D.</p>
-										{dndNotifications.map((item) => (
-											<div
+										{dndNotifications.map((item, index) => (
+											<motion.div
 												key={item.id}
 												className={`rounded-lg border-l-[3px] px-2.5 ${desktopSettings.notificationCenterCompact ? 'py-1.5' : 'py-2.5'} border-violet-300/55 bg-violet-500/10`}
+												initial={{ opacity: 0, x: 8 }}
+												animate={{ opacity: 1, x: 0 }}
+												transition={{ duration: 0.15, delay: Math.min(index * 0.03, 0.18) }}
 											>
 												<button
 													onClick={() => markAsRead(item.id)}
@@ -294,7 +328,7 @@ export const MenuBar = () => {
 														Rimuovi
 													</button>
 												</div>
-											</div>
+											</motion.div>
 										))}
 									</div>
 								)}
@@ -305,23 +339,23 @@ export const MenuBar = () => {
 									</div>
 								)}
 							</div>
-						</div>
+						</motion.div>
 					)}
+					</AnimatePresence>
 				</div>
 				<div className="relative">
 					<button
 						onClick={() => {
+							closeAllMenus()
 							setUserMenuOpen((v) => !v)
-							setAppleMenuOpen(false)
-							setAppMenuOpen(false)
-							setNotificationsOpen(false)
 						}}
 						className="px-2 py-1 rounded-md hover:bg-white/15 transition"
 					>
 						{currentUser?.displayName ?? 'Utente'}
 					</button>
+					<AnimatePresence>
 					{isUserMenuOpen && (
-						<div className="absolute right-0 mt-2 w-80 rounded-2xl border border-white/20 bg-black/80 backdrop-blur-2xl p-2 shadow-2xl">
+						<motion.div className="absolute right-0 mt-2 w-80 rounded-2xl border border-white/20 bg-black/80 backdrop-blur-2xl p-2 shadow-2xl" initial={{ opacity: 0, y: -8, scale: 0.92 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.95 }} transition={panelTransition} style={{ transformOrigin: 'top right' }}>
 							<div className="rounded-xl bg-white/5 border border-white/10 px-3 py-3">
 								<div className="flex items-center justify-between gap-2">
 									<div>
@@ -355,14 +389,46 @@ export const MenuBar = () => {
 								<Power className="h-4 w-4" />
 								Esci dalla sessione
 							</button>
-						</div>
+						</motion.div>
 					)}
+					</AnimatePresence>
 				</div>
-				<button onClick={open} className="h-6 w-6 grid place-items-center rounded-md hover:bg-white/15 transition" aria-label="Apri Spotlight">
+				<motion.button onClick={open} className="h-6 w-6 grid place-items-center rounded-md hover:bg-white/15 transition" aria-label="Apri Spotlight" whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.95 }}>
 					<Search className="w-3.5 h-3.5" />
-				</button>
-				<span className="font-medium capitalize">{dateLabel}</span>
-				<span className="font-semibold tabular-nums">{timeLabel}</span>
+				</motion.button>
+				<div className="relative">
+					<button
+						onClick={() => {
+							closeAllMenus()
+							setClockMenuOpen((v) => !v)
+						}}
+						className="inline-flex items-center gap-2 rounded-md px-2 py-1 hover:bg-white/15 transition"
+						title="Apri pannello orario"
+					>
+						<span className="font-medium capitalize">{dateLabel}</span>
+						<span className="font-semibold tabular-nums">{timeLabel}</span>
+					</button>
+					<AnimatePresence>
+						{isClockMenuOpen && (
+							<motion.div
+								className="absolute right-0 mt-2 w-64 rounded-2xl border border-white/20 bg-black/80 backdrop-blur-2xl p-3 shadow-2xl"
+								initial={{ opacity: 0, y: -6, scale: 0.98 }}
+								animate={{ opacity: 1, y: 0, scale: 1 }}
+								exit={{ opacity: 0, y: -6, scale: 0.98 }}
+								transition={panelTransition}
+								style={{ transformOrigin: 'top right' }}
+							>
+								<p className="text-[11px] uppercase tracking-wider text-white/45">Clock</p>
+								<p className="mt-1 text-3xl font-semibold tabular-nums text-white">{timeLabel}</p>
+								<p className="text-xs capitalize text-white/65">{dateLabel}</p>
+								<div className="mt-3 grid grid-cols-2 gap-2">
+									<button onClick={() => { open(); setClockMenuOpen(false) }} className="rounded-lg border border-white/15 bg-white/5 px-2 py-1.5 text-xs hover:bg-white/10">Spotlight</button>
+									<button onClick={() => { toggleDoNotDisturb(); setClockMenuOpen(false) }} className="rounded-lg border border-white/15 bg-white/5 px-2 py-1.5 text-xs hover:bg-white/10">{desktopSettings.doNotDisturb ? 'Disattiva N.D.' : 'Attiva N.D.'}</button>
+								</div>
+							</motion.div>
+						)}
+					</AnimatePresence>
+				</div>
 			</div>
 		</header>
 	)

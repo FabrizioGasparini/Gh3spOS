@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { AppWindow, Bell, Compass, Search, Settings2, SlidersHorizontal, Sparkles, UserRound, Wallpaper, Wrench } from "lucide-react";
 import { useApps } from "@/providers/apps";
 import { useSpotlight } from "@/providers/spotlight";
@@ -53,7 +53,7 @@ const SETTINGS_SUBTAB_LABELS: Record<SettingsSection, Record<string, string>> = 
 
 export default function Spotlight() {
     const { isOpen, close, query, setQuery, toggle } = useSpotlight();
-    const { apps } = useApps()
+    const { apps, canUsePermission } = useApps()
     const { openWindow } = useWindowManager()
     const { notify } = useNotifications()
     const [storedSettings] = usePersistentStore<DesktopSettings>('gh3sp:settings', DEFAULT_DESKTOP_SETTINGS)
@@ -77,6 +77,7 @@ export default function Spotlight() {
     }
 
     const openAppById = (id: string) => {
+        if (!canUsePermission(id, 'launch')) return
         const app = apps.get(id)
         if (!app) return
         openWindow(app, id)
@@ -103,7 +104,9 @@ export default function Spotlight() {
             keywords: 'dnd non disturbare notifiche modalità',
             run: () => {
                 setSetting('doNotDisturb', !settings.doNotDisturb)
-                notify(settings.doNotDisturb ? 'Non disturbare disattivato' : 'Non disturbare attivato', 'info')
+                if (canUsePermission('settings', 'notifications')) {
+                    notify(settings.doNotDisturb ? 'Non disturbare disattivato' : 'Non disturbare attivato', 'info')
+                }
                 close()
             },
         },
@@ -127,7 +130,9 @@ export default function Spotlight() {
             icon: <Bell className="h-4 w-4" />,
             keywords: 'test notifica notifiche preview sound durata',
             run: () => {
-                notify('Notifica di test da Spotlight', 'success')
+                if (canUsePermission('settings', 'notifications')) {
+                    notify('Notifica di test da Spotlight', 'success')
+                }
                 close()
             },
         },
@@ -467,72 +472,87 @@ export default function Spotlight() {
         setSelectedIndex(0)
     }, [query, isOpen])
 
-    if (!isOpen) return null;
-
     return (
-        <div className="fixed inset-0 bg-black/55 z-[100] flex items-start justify-center p-4" onClick={close}>
-            <motion.div
-                className="mt-16 bg-black/45 backdrop-blur-2xl rounded-2xl w-full max-w-2xl border border-white/20 shadow-2xl overflow-hidden"
-                initial={{ opacity: 0, scale: 0.97, y: -8 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.97, y: -8 }}
-                transition={{ duration: settings.reduceMotion ? 0 : 0.16 }}
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="flex items-center gap-3 px-4 py-3 border-b border-white/15 bg-white/5">
-                    <Search className="h-4 w-4 text-white/60" />
-                    <input
-                        className="w-full bg-transparent text-white text-lg outline-none placeholder:text-white/50"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        autoFocus
-                        placeholder="Cerca app, impostazioni e azioni rapide..."
-                    />
-                </div>
+        <AnimatePresence>
+            {isOpen && (
+                <motion.div
+                    className="fixed inset-0 bg-black/55 z-[100] flex items-start justify-center p-4"
+                    onClick={close}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: settings.reduceMotion ? 0 : 0.2 }}
+                >
+                    <motion.div
+                        className="mt-16 bg-black/45 backdrop-blur-2xl rounded-2xl w-full max-w-2xl border border-white/20 shadow-2xl overflow-hidden"
+                        initial={{ opacity: 0, scale: 0.9, y: -18, filter: 'blur(10px)' }}
+                        animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+                        exit={{ opacity: 0, scale: 0.94, y: -12, filter: 'blur(6px)' }}
+                        transition={settings.reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 360, damping: 28, mass: 0.9 }}
+                        style={{ transformOrigin: 'top center' }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <motion.div className="flex items-center gap-3 px-4 py-3 border-b border-white/15 bg-white/5" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: settings.reduceMotion ? 0 : 0.18, delay: 0.03 }}>
+                            <Search className="h-4 w-4 text-white/60" />
+                            <input
+                                className="w-full bg-transparent text-white text-lg outline-none placeholder:text-white/50"
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                                autoFocus
+                                placeholder="Cerca app, impostazioni e azioni rapide..."
+                            />
+                        </motion.div>
 
-                <div className="max-h-[65vh] overflow-auto custom-scroll px-2 py-2">
-                    {(sectionOrder).map((groupKey) => (
-                        grouped[groupKey].length > 0 ? (
-                            <div key={groupKey} className="mb-2">
-                                <div className="px-2 pt-2 pb-1 text-[11px] uppercase tracking-wider text-white/45">{groupKey}</div>
-                                <ul className="space-y-1">
-                                    {grouped[groupKey].map((item) => {
-                                        const absoluteIndex = results.findIndex((r) => r.id === item.id)
-                                        const selected = absoluteIndex === selectedIndex
-                                        return (
-                                            <li
-                                                key={item.id}
-                                                onMouseEnter={() => setSelectedIndex(absoluteIndex)}
-                                                onClick={() => item.run()}
-                                                className={`cursor-pointer rounded-xl px-3 py-2 flex items-center gap-3 border transition ${selected ? 'bg-white/20 border-white/25' : 'bg-white/[0.03] border-transparent hover:bg-white/10'}`}
-                                            >
-                                                <div className="h-7 w-7 rounded-lg bg-white/10 border border-white/15 grid place-items-center text-white/80">
-                                                    {item.icon}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <p className="text-sm text-white truncate">{item.title}</p>
-                                                    <p className="text-xs text-white/55 truncate">{item.subtitle}</p>
-                                                </div>
-                                            </li>
-                                        )
-                                    })}
-                                </ul>
-                            </div>
-                        ) : null
-                    ))}
+                        <div className="max-h-[65vh] overflow-auto custom-scroll px-2 py-2">
+                            {(sectionOrder).map((groupKey) => (
+                                grouped[groupKey].length > 0 ? (
+                                    <motion.div key={groupKey} className="mb-2" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: settings.reduceMotion ? 0 : 0.16 }}>
+                                        <div className="px-2 pt-2 pb-1 text-[11px] uppercase tracking-wider text-white/45">{groupKey}</div>
+                                        <ul className="space-y-1">
+                                            {grouped[groupKey].map((item, index) => {
+                                                const absoluteIndex = results.findIndex((r) => r.id === item.id)
+                                                const selected = absoluteIndex === selectedIndex
+                                                return (
+                                                    <motion.li
+                                                        key={item.id}
+                                                        onMouseEnter={() => setSelectedIndex(absoluteIndex)}
+                                                        onClick={() => item.run()}
+                                                        className={`cursor-pointer rounded-xl px-3 py-2 flex items-center gap-3 border transition ${selected ? 'bg-white/20 border-white/25' : 'bg-white/[0.03] border-transparent hover:bg-white/10'}`}
+                                                        initial={{ opacity: 0, y: 6 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        transition={{ duration: settings.reduceMotion ? 0 : 0.14, delay: settings.reduceMotion ? 0 : Math.min(index * 0.015, 0.11) }}
+                                                        whileHover={settings.reduceMotion ? undefined : { scale: 1.01, x: 2 }}
+                                                        whileTap={settings.reduceMotion ? undefined : { scale: 0.995 }}
+                                                    >
+                                                        <div className="h-7 w-7 rounded-lg bg-white/10 border border-white/15 grid place-items-center text-white/80">
+                                                            {item.icon}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <p className="text-sm text-white truncate">{item.title}</p>
+                                                            <p className="text-xs text-white/55 truncate">{item.subtitle}</p>
+                                                        </div>
+                                                    </motion.li>
+                                                )
+                                            })}
+                                        </ul>
+                                    </motion.div>
+                                ) : null
+                            ))}
 
-                    {results.length === 0 && (
-                        <div className="px-4 py-10 text-center text-white/55 text-sm">
-                            Nessun risultato per “{query}”
+                            {results.length === 0 && (
+                                <div className="px-4 py-10 text-center text-white/55 text-sm">
+                                    Nessun risultato per “{query}”
+                                </div>
+                            )}
                         </div>
-                    )}
-                </div>
 
-                <div className="px-4 py-2 border-t border-white/10 bg-white/[0.03] text-[11px] text-white/50 flex items-center justify-between">
-                    <span>↑ ↓ naviga · Invio esegue</span>
-                    <span>Esc chiude</span>
-                </div>
-            </motion.div>
-        </div>
+                        <motion.div className="px-4 py-2 border-t border-white/10 bg-white/[0.03] text-[11px] text-white/50 flex items-center justify-between" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: settings.reduceMotion ? 0 : 0.15, delay: 0.06 }}>
+                            <span>↑ ↓ naviga · Invio esegue</span>
+                            <span>Esc chiude</span>
+                        </motion.div>
+                    </motion.div>
+                </motion.div>
+            )}
+        </AnimatePresence>
     );
 }

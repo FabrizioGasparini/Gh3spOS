@@ -1,6 +1,8 @@
 export type SystemSettings = {
 	themeMode: 'auto' | 'dark' | 'light'
 	accentColor: 'blue' | 'purple' | 'green' | 'orange' | 'pink'
+	themeEngineTimeAwareAuto: boolean
+	themeEngineDynamicAccent: boolean
 	reduceTransparency: boolean
 	reduceMotion: boolean
 	menuBarShowFocusedApp: boolean
@@ -40,6 +42,8 @@ export type SystemSettings = {
 export const SYSTEM_SETTINGS_DEFAULTS: SystemSettings = {
 	themeMode: 'dark',
 	accentColor: 'blue',
+	themeEngineTimeAwareAuto: true,
+	themeEngineDynamicAccent: true,
 	reduceTransparency: false,
 	reduceMotion: false,
 	menuBarShowFocusedApp: true,

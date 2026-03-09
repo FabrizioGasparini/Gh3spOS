@@ -39,11 +39,18 @@ export type WindowInstance = {
 
 export interface WidgetDefinition {
     name: string;
-    component: React.FC<Props>;
+    component: React.FC<WidgetRenderProps>;
     defaultSize?: { width: number; height: number };
     inStore?: boolean;
     storeDescription?: string;
 }
+
+export type WidgetSettingValue = string | number | boolean;
+
+export type WidgetRenderProps = {
+    widgetInstanceId?: string;
+    widgetSettings?: Record<string, WidgetSettingValue>;
+};
 
 export interface WidgetInstance {
     id: string;
@@ -51,6 +58,18 @@ export interface WidgetInstance {
     widgetId: string;
     position: { x: number; y: number };
     size: { width: number; height: number };
+    zIndex?: number;
+    style?: {
+        opacity: number;
+        blur: number;
+        border: number;
+    };
+    settings?: {
+        contentScaleMode: "auto" | "manual";
+        contentScale: number;
+        padding: number;
+        widgetSpecific?: Record<string, WidgetSettingValue>;
+    };
     fixed?: boolean;
 }
 

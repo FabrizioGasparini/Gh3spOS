@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useApps } from '@/providers/apps'
 import { useWindowManager } from '@/providers/window-manager'
+import { useNotifications } from '@/providers/notifications'
 
 export const AppStore: React.FC = () => {
-  const { catalog, isInstalled, isEnabled, isPinned, installApp, uninstallApp, setAppEnabled, setPinned } = useApps()
+  const { catalog, isInstalled, isEnabled, isPinned, canUsePermission, installApp, uninstallApp, setAppEnabled, setPinned } = useApps()
   const { openWindow, windows, closeWindow } = useWindowManager()
+  const { notify } = useNotifications()
   const [query, setQuery] = useState('')
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null)
   const [selectedScreenshot, setSelectedScreenshot] = useState(0)
@@ -84,6 +86,14 @@ export const AppStore: React.FC = () => {
   }, [selected])
 
   const openAppFromStore = async (item: (typeof catalog)[number]) => {
+    if (!canUsePermission(item.id, 'launch')) {
+      const message = `Permesso negato: ${item.definition.name} non può essere avviata.`
+      setJobMessage((prev) => ({ ...prev, [item.id]: message }))
+      if (canUsePermission('app-store', 'notifications')) {
+        notify(message, 'warning')
+      }
+      return
+    }
     if (!isInstalled(item.id)) {
       const ok = await installAppRuntime(item)
       if (!ok) return
@@ -281,8 +291,8 @@ export const AppStore: React.FC = () => {
   }
 
   return (
-    <div className="h-full w-full p-5 text-white overflow-auto custom-scroll bg-gradient-to-b from-[#10141f]/95 via-[#0c1220]/95 to-[#0a0f1d]/95 rounded-xl">
-      <div className="rounded-3xl border border-white/20 bg-white/5 backdrop-blur-xl p-5 mb-5">
+    <div className="h-full w-full p-5 text-white overflow-auto custom-scroll ">
+      <div className="rounded-3xl border border-white/20 bg-white/15 backdrop-blur-xl p-5 mb-5">
         <p className="text-[11px] uppercase tracking-[0.2em] text-white/55">Today</p>
         <h2 className="text-3xl font-semibold leading-tight mt-1">App Store</h2>
         <p className="text-sm text-white/70 mt-2">Scopri, installa e gestisci le app del tuo desktop.</p>

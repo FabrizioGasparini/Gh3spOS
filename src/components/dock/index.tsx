@@ -15,6 +15,7 @@ export const Dock = () => {
   const [dockMouseAxis, setDockMouseAxis] = useState<number | null>(null)
   const [clickedAppId, setClickedAppId] = useState<string | null>(null)
   const [isDockHovered, setIsDockHovered] = useState(false)
+  const [isNearRevealEdge, setIsNearRevealEdge] = useState(false)
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [previews, setPreviews] = useState<Record<string, string>>({})
   const { getPreviewRef } = usePreviewRefs()
@@ -149,6 +150,31 @@ export const Dock = () => {
       ? 'right-4 top-1/2 -translate-y-1/2 flex-col'
       : 'bottom-4 left-1/2 -translate-x-1/2 flex-row'
 
+  useEffect(() => {
+    const onMouseMove = (event: MouseEvent) => {
+      const width = window.innerWidth
+      const height = window.innerHeight
+
+      if (settings.dockPosition === 'bottom') {
+        setIsNearRevealEdge(event.clientY >= height - 90)
+        return
+      }
+
+      if (settings.dockPosition === 'left') {
+        setIsNearRevealEdge(event.clientX <= 90)
+        return
+      }
+
+      setIsNearRevealEdge(event.clientX >= width - 90)
+    }
+
+    window.addEventListener('mousemove', onMouseMove)
+    return () => window.removeEventListener('mousemove', onMouseMove)
+  }, [settings.dockPosition])
+
+  const hasMaximizedWindow = windows.some((w) => w.isMaximized)
+  const shouldRevealWhenMaximized = hasMaximizedWindow ? (isNearRevealEdge || isDockHovered || hoveredAppId !== null) : true
+
   // Azioni menu contestuale
   const handleContextMenuAction = (action: string, appId: string) => {
     const matchingWindows = windows.filter(w => w.appId === appId)
@@ -173,7 +199,20 @@ export const Dock = () => {
       {/* Dock normale */}
       <div
   		className={`fixed ${dockPositionClass} z-[95] flex items-end gap-3 px-4 py-2 rounded-2xl border border-white/25 bg-white/12 backdrop-blur-2xl shadow-[0_15px_45px_rgba(0,0,0,0.5)] transition-all duration-200`}
-        style={{ display: windows.filter(w => w.isMaximized).length > 0 ? 'none' : 'flex', opacity: settings.dockAutoHide && !isDockHovered ? 0.12 : 1 }}
+        style={{
+          display: 'flex',
+          opacity: hasMaximizedWindow
+            ? (shouldRevealWhenMaximized ? 1 : 0.02)
+            : (settings.dockAutoHide && !isDockHovered ? 0.12 : 1),
+          transform: hasMaximizedWindow && !shouldRevealWhenMaximized
+            ? (settings.dockPosition === 'bottom'
+              ? 'translate(-50%, 28px)'
+              : settings.dockPosition === 'left'
+                ? 'translate(-28px, -50%)'
+                : 'translate(28px, -50%)')
+            : undefined,
+          pointerEvents: hasMaximizedWindow && !shouldRevealWhenMaximized ? 'none' : 'auto',
+        }}
         onMouseMove={(e) => setDockMouseAxis(settings.dockPosition === 'bottom' ? e.clientX : e.clientY)}
         onMouseEnter={() => setIsDockHovered(true)}
         onMouseLeave={handleDockLeave}

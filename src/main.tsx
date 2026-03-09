@@ -14,11 +14,14 @@ import { NotificationsProvider } from '@/providers/notifications'
 import { AuthProvider } from '@/providers/auth'
 import { EnsureLoggedIn } from '@/modules/auth/ensure-logged-in'
 import { EnsureUserExists } from '@/modules/auth/ensure-user-exists'
+import { GlobalPickerProvider } from '@/providers/global-picker'
+import { ThemeEngineProvider } from '@/providers/theme-engine'
 
 init(
 	<ErrorBoundary>
 		<PersistentStoreProvider>
 			<AuthProvider>
+				<ThemeEngineProvider>
 				<EnsureUserExists>
 					<EnsureLoggedIn>
 						<AppsProvider>
@@ -26,13 +29,15 @@ init(
 								<NotificationsProvider>
 									<ModalProvider>
 										<WindowManagerProvider>
-											<SpotlightProvider>
-												<PreviewRefsProvider>
-													<WidgetManagerProvider>
-														<RouterProvider router={router} future={{ v7_startTransition: true }} />
-													</WidgetManagerProvider>
-												</PreviewRefsProvider>
-											</SpotlightProvider>
+											<GlobalPickerProvider>
+												<SpotlightProvider>
+													<PreviewRefsProvider>
+														<WidgetManagerProvider>
+															<RouterProvider router={router} future={{ v7_startTransition: true }} />
+														</WidgetManagerProvider>
+													</PreviewRefsProvider>
+												</SpotlightProvider>
+											</GlobalPickerProvider>
 										</WindowManagerProvider>
 									</ModalProvider>
 								</NotificationsProvider>
@@ -40,6 +45,7 @@ init(
 						</AppsProvider>
 					</EnsureLoggedIn>
 				</EnsureUserExists>
+				</ThemeEngineProvider>
 			</AuthProvider>
 		</PersistentStoreProvider>
 	</ErrorBoundary>
