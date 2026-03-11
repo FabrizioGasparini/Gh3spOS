@@ -60,6 +60,13 @@ export const FilePicker: React.FC<FilePickerProps> = ({ onSelected, selectParams
   
   const { showModal } = useModal()
 
+  const isAllowedFileExtension = (fileName: string) => {
+    if (!selectParams.fileExtensions || selectParams.fileExtensions.length === 0) return true
+    const ext = (fileName.split('.').pop() || '').toLowerCase()
+    const allowed = selectParams.fileExtensions.map((entry) => entry.toLowerCase())
+    return allowed.includes(ext)
+  }
+
   // ===== Use Effects ===== \\
   useEffect(() => {
     fetchDrives()
@@ -145,7 +152,7 @@ export const FilePicker: React.FC<FilePickerProps> = ({ onSelected, selectParams
         setRenameValue("")
         setSelectedItem(item)
         if (selectParams.allow === "file") {
-            if (selectParams.fileExtensions && !selectParams.fileExtensions.includes(item.name.split('.').pop() || '')) return;
+        if (!isAllowedFileExtension(item.name)) return;
             setPickedItem(item)
             setRenameValue(item.name)
         } else if (selectParams.allow === "folder" && item.type === "folder") {
@@ -159,7 +166,8 @@ export const FilePicker: React.FC<FilePickerProps> = ({ onSelected, selectParams
     const handleItemDoubleClick = (item: FileItem) => {
         if (item.type === 'folder') enterFolder(item.name)
         else if (item.type === 'disk') updateTabPath(item.name, "/")
-        else setSelectedItem(item)
+      else if (selectParams.allow === 'file' && isAllowedFileExtension(item.name) && !selectParams.allowRename) handleSelect(item)
+      else setSelectedItem(item)
     }
     
     const handleSelect = (item: FileItem | null) => {
@@ -182,7 +190,7 @@ export const FilePicker: React.FC<FilePickerProps> = ({ onSelected, selectParams
         }
 
         if (selectParams.allow === "file") {
-            if (selectParams.fileExtensions && !selectParams.fileExtensions.includes(item.name.split('.').pop() || '')) {
+          if (!isAllowedFileExtension(item.name)) {
                 setError("Tipo di file non consentito")
                 return;
             }

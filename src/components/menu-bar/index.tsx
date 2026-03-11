@@ -12,7 +12,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 export const MenuBar = () => {
 	const { apps, canUsePermission } = useApps()
 	const { currentUser, logout } = useAuth()
-	const { notifications, unreadCount, markAsRead, markAllAsRead, clearNotifications, removeNotification } = useNotifications()
+	const { notifications, unreadCount, markAsRead, markAllAsRead, clearNotifications, removeNotification, notify } = useNotifications()
 	const [storedSettings, setStoredSettings] = usePersistentStore<DesktopSettings>('gh3sp:settings', DEFAULT_DESKTOP_SETTINGS)
 	const desktopSettings = useMemo(() => resolveDesktopSettings(storedSettings), [storedSettings])
 	const { open } = useSpotlight()
@@ -49,6 +49,9 @@ export const MenuBar = () => {
 	const focusedApp = focusedWindow ? apps.get(focusedWindow.appId) : null
 	const openById = (id: string) => {
 		if (!canUsePermission(id, 'launch')) {
+			if (canUsePermission('settings', 'notifications')) {
+				notify(`Permesso negato: avvio disabilitato per ${id}.`, 'warning')
+			}
 			return
 		}
 		const app = apps.get(id)

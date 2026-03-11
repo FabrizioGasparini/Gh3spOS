@@ -13,6 +13,7 @@ import { AppStore } from "@/apps/app-store";
 import { VisualStudioCodeApp } from "@/apps/visual-studio-code";
 import { GlobalFilePickerApp } from "@/apps/global-file-picker";
 import { SSHConnect } from "@/apps/ssh-connect";
+import { MailClient } from "@/apps/mail-client";
 
 export const apps: Map<string, AppDefinition> = new Map<string, AppDefinition>([
     [
@@ -42,7 +43,7 @@ export const apps: Map<string, AppDefinition> = new Map<string, AppDefinition>([
             icon: "preview.png",
             component: Gh3Preview,
             defaultSize: { width: 30, height: 40 },
-            ghost: false,
+            ghost: true,
             isPinned: false,
         },
     ],
@@ -149,6 +150,17 @@ export const apps: Map<string, AppDefinition> = new Map<string, AppDefinition>([
             icon: "dock-ssh.png",
             component: SSHConnect,
             isPinned: true,
+        },
+    ],
+    [
+        "mail-client",
+        {
+            name: "Mail",
+            icon: "dock-mail.svg",
+            component: MailClient,
+            isPinned: true,
+            singleInstance: true,
+            defaultSize: { width: 85, height: 90 },
         },
     ],
 ]);

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Bell, Brush, LayoutTemplate, MonitorSmartphone, Search, SlidersHorizontal, Sparkles, UserRound, Wallpaper as WallpaperIcon, Wrench } from 'lucide-react'
+import { Bell, BellRing, Brush, ChevronDown, ChevronRight, Globe, HardDrive, KeyRound, LayoutTemplate, MonitorSmartphone, Play, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, Sparkles, UserRound, Wallpaper as WallpaperIcon, Wrench } from 'lucide-react'
 import { usePersistentStore } from '@/providers/persistent-store'
 import { useAuth } from '@/providers/auth'
 import { useNotifications } from '@/providers/notifications'
@@ -209,7 +209,7 @@ export const Settings: React.FC<{ windowId: string }> = () => {
   const [rawSettings, setSettings] = usePersistentStore<DesktopSettings>('gh3sp:settings', DEFAULT_DESKTOP_SETTINGS)
   const { users, currentUser, isAdmin, createUser } = useAuth()
   const { notify } = useNotifications()
-  const { catalog, permissionKeys, getPermission, canUsePermission, setPermission, resetPermissions } = useApps()
+  const { permissionTargets, permissionKeys, getPermission, canUsePermission, isPermissionLocked, setPermission, resetPermissions } = useApps()
 
   const settings = useMemo(() => resolveDesktopSettings(rawSettings), [rawSettings])
   const sectionTitle = useMemo(() => SECTION_ITEMS.find((item) => item.id === activeSection)?.label ?? 'Impostazioni', [activeSection])
@@ -225,6 +225,7 @@ export const Settings: React.FC<{ windowId: string }> = () => {
   const [newRole, setNewRole] = useState<'admin' | 'user'>('user')
   const [userCreateMessage, setUserCreateMessage] = useState<string | null>(null)
   const [settingsQuery, setSettingsQuery] = useState('')
+  const [expandedPermissionApp, setExpandedPermissionApp] = usePersistentStore<string | null>('gh3sp:settings:expanded-permission-app', null)
 
   const updateSetting = <K extends keyof DesktopSettings,>(key: K, value: DesktopSettings[K]) => {
     setSettings((prev) => ({ ...resolveDesktopSettings(prev), [key]: value }))
@@ -285,6 +286,14 @@ export const Settings: React.FC<{ windowId: string }> = () => {
     network: 'Rete',
     ssh: 'SSH',
     notifications: 'Notifiche',
+  }
+
+  const permissionIcons: Record<AppPermissionKey, React.ReactNode> = {
+    launch: <Play className="h-3.5 w-3.5" />,
+    filesystem: <HardDrive className="h-3.5 w-3.5" />,
+    network: <Globe className="h-3.5 w-3.5" />,
+    ssh: <KeyRound className="h-3.5 w-3.5" />,
+    notifications: <BellRing className="h-3.5 w-3.5" />,
   }
 
   const sendTestNotification = (type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
@@ -351,7 +360,7 @@ export const Settings: React.FC<{ windowId: string }> = () => {
         </aside>
 
         <main className="h-full overflow-auto p-6 custom-scroll">
-          <div className="sticky top-0 z-20 mb-5 rounded-xl border border-white/10 bg-black/35 backdrop-blur-xl px-4 py-3">
+          <div className="top-0 z-20 mb-5 rounded-xl border border-white/10 bg-black/35 backdrop-blur-xl px-4 py-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] uppercase tracking-[0.2em] text-white/50">Pannello</p>
@@ -727,32 +736,79 @@ export const Settings: React.FC<{ windowId: string }> = () => {
               </div>
 
               <div className="space-y-3">
-                {catalog.map((item) => (
+                {permissionTargets.map((item) => (
                   <div key={item.id} className={sectionCardClass}>
-                    <div className="flex items-center justify-between gap-3 mb-3">
-                      <div>
-                        <p className="text-sm font-semibold text-white/90">{item.definition.name}</p>
-                        <p className="text-[11px] text-white/55">{item.id}</p>
+                    <button
+                      onClick={() => setExpandedPermissionApp((prev) => (prev === item.id ? null : item.id))}
+                      className="w-full flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 hover:scale-[1.02] transition-transform"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-9 w-9 rounded-lg border border-white/15 bg-white/[0.06] inline-flex items-center justify-center overflow-hidden shrink-0">
+                          {typeof item.definition.icon === 'string' ? (
+                            <img
+                              src={`/apps/${item.definition.icon}`}
+                              alt={item.definition.name}
+                              className="h-7 w-7 rounded-md object-cover"
+                              onError={(event) => {
+                                event.currentTarget.src = '/apps/default-icon.svg'
+                              }}
+                            />
+                          ) : (
+                            <span className="text-white/80 text-xs font-semibold">{item.definition.name.slice(0, 1).toUpperCase()}</span>
+                          )}
+                        </div>
+                        <div className="min-w-0 text-left">
+                          <p className="text-sm font-semibold text-white/90 truncate">{item.definition.name}</p>
+                          <p className="text-[11px] text-white/55 truncate">{item.id}{item.isCore ? ' · core' : ''}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {permissionKeys.map((permission) => {
-                        const current = getPermission(item.id, permission)
-                        return (
-                          <div key={`${item.id}:${permission}`} className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-2">
-                            <p className="text-[11px] text-white/65 mb-1">{permissionLabels[permission]}</p>
-                            <select
-                              value={current}
-                              onChange={(event) => setPermission(item.id, permission, event.target.value as 'allow' | 'deny')}
-                              className="w-full rounded-md border border-white/10 bg-white/10 px-2 py-1.5 text-xs outline-none"
-                            >
-                              <option value="allow" className="bg-slate-900">Allow</option>
-                              <option value="deny" className="bg-slate-900">Deny</option>
-                            </select>
-                          </div>
-                        )
-                      })}
-                    </div>
+                      <div className="text-white/60 shrink-0">
+                        {expandedPermissionApp === item.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      </div>
+                    </button>
+
+                    {expandedPermissionApp === item.id ? (
+                      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-3 animate-fadeIn">
+                        {permissionKeys.map((permission) => {
+                          const current = getPermission(item.id, permission)
+                          const lockDeny = isPermissionLocked(item.id, permission, 'deny')
+                          const isAllow = current === 'allow'
+                          return (
+                            <div key={`${item.id}:${permission}`} className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-2">
+                              <div className="flex items-center justify-between gap-2 mb-2">
+                                <p className="text-[11px] text-white/75 inline-flex items-center gap-1.5">
+                                  <span className="text-white/70">{permissionIcons[permission]}</span>
+                                  {permissionLabels[permission]}
+                                </p>
+                                <span
+                                  className={`text-[10px] inline-flex items-center gap-1 rounded-full px-2 py-0.5 border ${isAllow ? 'border-emerald-300/30 bg-emerald-500/20 text-emerald-100' : 'border-rose-300/30 bg-rose-500/20 text-rose-100'}`}
+                                >
+                                  {isAllow ? <ShieldCheck className="h-3 w-3" /> : <ShieldAlert className="h-3 w-3" />}
+                                  {isAllow ? 'Consentito' : 'Negato'}
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-1.5">
+                                <button
+                                  onClick={() => setPermission(item.id, permission, 'allow')}
+                                  className={`rounded-md border px-2 py-1.5 text-xs transition ${isAllow ? 'border-emerald-300/40 bg-emerald-500/25 text-emerald-100' : 'border-white/10 bg-white/5 hover:bg-white/10 text-white/75'}`}
+                                >
+                                  Allow
+                                </button>
+                                <button
+                                  onClick={() => setPermission(item.id, permission, 'deny')}
+                                  disabled={lockDeny}
+                                  className={`rounded-md border px-2 py-1.5 text-xs transition ${!isAllow ? 'border-rose-300/40 bg-rose-500/25 text-rose-100' : 'border-white/10 bg-white/5 hover:bg-white/10 text-white/75'} disabled:opacity-40 disabled:cursor-not-allowed`}
+                                >
+                                  Deny
+                                </button>
+                              </div>
+                              {lockDeny ? <p className="mt-1 text-[10px] text-white/45">Core app: launch non disattivabile.</p> : null}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : null}
                   </div>
                 ))}
               </div>

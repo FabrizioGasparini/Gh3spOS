@@ -9,6 +9,9 @@ import drivelist from 'drivelist'
 import mime from 'mime-types';
 import WebSocket, { WebSocketServer } from "ws";
 import { Client } from "ssh2";
+import { ImapFlow } from 'imapflow'
+import nodemailer from 'nodemailer'
+import { simpleParser } from 'mailparser'
 
 const app = express()
 const PORT = 3001
@@ -368,6 +371,709 @@ const ensureSecureBrowserPage = async (targetUrl) => {
 
 app.use(cors())
 app.use(bodyParser.json())
+
+const EMAIL_PROVIDER_PRESETS = {
+  gmail: {
+    label: 'Gmail',
+    imap: { host: 'imap.gmail.com', port: 993, secure: true },
+    smtp: { host: 'smtp.gmail.com', port: 465, secure: true },
+  },
+  outlook: {
+    label: 'Outlook / Hotmail',
+    imap: { host: 'outlook.office365.com', port: 993, secure: true },
+    smtp: { host: 'smtp.office365.com', port: 587, secure: false },
+  },
+  yahoo: {
+    label: 'Yahoo',
+    imap: { host: 'imap.mail.yahoo.com', port: 993, secure: true },
+    smtp: { host: 'smtp.mail.yahoo.com', port: 465, secure: true },
+  },
+  icloud: {
+    label: 'iCloud',
+    imap: { host: 'imap.mail.me.com', port: 993, secure: true },
+    smtp: { host: 'smtp.mail.me.com', port: 587, secure: false },
+  },
+}
+
+const normalizePort = (value, fallback) => {
+  const parsed = Number.parseInt(String(value || ''), 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback
+  return parsed
+}
+
+const toAddressString = (addressItem) => {
+  if (!addressItem || typeof addressItem !== 'object') return ''
+  const name = String(addressItem.name || '').trim()
+  const address = String(addressItem.address || '').trim()
+  if (!name && !address) return ''
+  if (name && address) return `${name} <${address}>`
+  return address || name
+}
+
+const mapAddressList = (items) => {
+  if (!Array.isArray(items)) return []
+  return items
+    .map((item) => toAddressString(item))
+    .filter(Boolean)
+}
+
+const resolveEmailConfig = (account) => {
+  const provider = String(account?.provider || 'custom').toLowerCase()
+  const email = String(account?.email || '').trim()
+  let password = String(account?.password || '').trim()
+  if (provider === 'gmail') {
+    password = password.replace(/\s+/g, '')
+  }
+  if (!email || !password) {
+    throw new Error('Email e password sono obbligatori')
+  }
+
+  const preset = EMAIL_PROVIDER_PRESETS[provider]
+  const imap = {
+    host: String(account?.imap?.host || preset?.imap?.host || '').trim(),
+    port: normalizePort(account?.imap?.port, preset?.imap?.port || 993),
+    secure: typeof account?.imap?.secure === 'boolean' ? account.imap.secure : Boolean(preset?.imap?.secure ?? true),
+  }
+  const smtp = {
+    host: String(account?.smtp?.host || preset?.smtp?.host || '').trim(),
+    port: normalizePort(account?.smtp?.port, preset?.smtp?.port || 465),
+    secure: typeof account?.smtp?.secure === 'boolean' ? account.smtp.secure : Boolean(preset?.smtp?.secure ?? true),
+  }
+
+  if (!imap.host || !smtp.host) {
+    throw new Error('Configurazione provider incompleta: host IMAP/SMTP mancanti')
+  }
+
+  return {
+    provider,
+    email,
+    password,
+    imap,
+    smtp,
+  }
+}
+
+const normalizeEmailError = (error, provider = 'custom') => {
+  const rawMessage = String(error?.message || error || 'Errore email sconosciuto')
+  const rawCode = String(error?.code || error?.responseCode || '').toUpperCase()
+  const rawCommand = String(error?.command || '').toUpperCase()
+  const responseText = String(error?.response || error?.responseText || '').toLowerCase()
+  const combined = `${rawMessage} ${rawCode} ${rawCommand} ${responseText}`.toLowerCase()
+
+  if (combined.includes('authentication') || combined.includes('auth') || combined.includes('invalid credentials') || rawCode === 'EAUTH') {
+    if (provider === 'gmail') {
+      return 'Autenticazione fallita: per Gmail usa una App Password (2FA) invece della password principale.'
+    }
+    if (provider === 'outlook') {
+      return 'Autenticazione fallita su Outlook: verifica password/app-password e che IMAP/SMTP sia abilitato.'
+    }
+    return 'Autenticazione fallita: verifica email, password/app-password e impostazioni IMAP/SMTP.'
+  }
+
+  if (combined.includes('command failed')) {
+    const details = [
+      rawCode ? `codice=${rawCode}` : '',
+      rawCommand ? `comando=${rawCommand}` : '',
+    ].filter(Boolean).join(' · ')
+    if (provider === 'gmail') {
+      return `Il server Gmail ha rifiutato il comando${details ? ` (${details})` : ''}. Verifica App Password (senza spazi), IMAP attivo e host/porta standard Gmail.`
+    }
+    return `Il server email ha rifiutato il comando${details ? ` (${details})` : ''}. Controlla credenziali, porta, TLS/SSL e provider selezionato.`
+  }
+
+  if (combined.includes('enotfound') || combined.includes('getaddrinfo') || combined.includes('host')) {
+    return 'Host IMAP/SMTP non raggiungibile o non valido. Verifica i campi host e DNS.'
+  }
+
+  if (combined.includes('timeout') || combined.includes('etimedout')) {
+    return 'Timeout di connessione al server email. Verifica rete, porte e firewall.'
+  }
+
+  if (combined.includes('certificate') || combined.includes('tls') || combined.includes('ssl')) {
+    return 'Errore TLS/SSL. Verifica porta e flag Secure per IMAP/SMTP.'
+  }
+
+  return rawMessage
+}
+
+const withImapClient = async (account, callback) => {
+  const config = resolveEmailConfig(account)
+  const client = new ImapFlow({
+    host: config.imap.host,
+    port: config.imap.port,
+    secure: config.imap.secure,
+    auth: {
+      user: config.email,
+      pass: config.password,
+    },
+    logger: false,
+  })
+
+  await client.connect()
+  try {
+    return await callback(client, config)
+  } finally {
+    try {
+      await client.logout()
+    } catch {
+      // ignore logout errors
+    }
+  }
+}
+
+const normalizeMailboxPath = (value) => {
+  const trimmed = String(value || '').trim()
+  return trimmed || 'INBOX'
+}
+
+const resolveArchiveMailboxPath = async (client) => {
+  const listing = await client.list()
+  const archiveByFlag = listing.find((item) => String(item.specialUse || '').toLowerCase().includes('archive'))
+  if (archiveByFlag?.path) return archiveByFlag.path
+
+  const archiveByName = listing.find((item) => String(item.path || '').toLowerCase().includes('archive'))
+  if (archiveByName?.path) return archiveByName.path
+
+  return 'Archive'
+}
+
+const resolveTrashMailboxPath = async (client) => {
+  const listing = await client.list()
+  const trashByFlag = listing.find((item) => String(item.specialUse || '').toLowerCase().includes('trash'))
+  if (trashByFlag?.path) return trashByFlag.path
+
+  const trashByName = listing.find((item) => {
+    const path = String(item.path || '').toLowerCase()
+    return path.includes('trash') || path.includes('bin') || path.includes('cestino')
+  })
+  if (trashByName?.path) return trashByName.path
+
+  return 'Trash'
+}
+
+const ensureMailboxExists = async (client, path) => {
+  const listing = await client.list()
+  if (listing.some((item) => String(item.path || '').toLowerCase() === String(path || '').toLowerCase())) {
+    return path
+  }
+
+  try {
+    await client.mailboxCreate(path)
+  } catch {
+    // best effort, may already exist or server may prevent creation with case mismatch
+  }
+
+  return path
+}
+
+const moveMessageByUidOrMessageId = async (client, options) => {
+  const sourceFolder = normalizeMailboxPath(options?.sourceFolder)
+  const destinationFolder = normalizeMailboxPath(options?.destinationFolder)
+  const uid = Number.parseInt(String(options?.uid || ''), 10)
+  const messageId = String(options?.messageId || '').trim()
+
+  await client.mailboxOpen(sourceFolder)
+  await ensureMailboxExists(client, destinationFolder)
+
+  if (Number.isFinite(uid) && uid > 0) {
+    await client.messageMove(uid, destinationFolder, { uid: true })
+    return
+  }
+
+  if (!messageId) {
+    throw new Error('UID o messageId richiesto per spostare il messaggio')
+  }
+
+  const allUids = await client.search({ all: true })
+  const sorted = [...allUids].sort((a, b) => b - a)
+
+  for (const candidateUid of sorted.slice(0, 400)) {
+    const item = await client.fetchOne(candidateUid, { envelope: true }, { uid: true })
+    const candidateMessageId = String(item?.envelope?.messageId || '').trim()
+    if (candidateMessageId && candidateMessageId === messageId) {
+      await client.messageMove(candidateUid, destinationFolder, { uid: true })
+      return
+    }
+  }
+
+  throw new Error('Messaggio non trovato nella cartella sorgente')
+}
+
+const messagePreview = (text) => {
+  const normalized = String(text || '').replace(/\s+/g, ' ').trim()
+  if (!normalized) return ''
+  if (normalized.length <= 220) return normalized
+  return `${normalized.slice(0, 217)}...`
+}
+
+app.get('/email/providers', (_req, res) => {
+  res.json({
+    ok: true,
+    providers: Object.entries(EMAIL_PROVIDER_PRESETS).map(([id, data]) => ({
+      id,
+      label: data.label,
+      imap: data.imap,
+      smtp: data.smtp,
+    })),
+  })
+})
+
+app.post('/email/test-connection', async (req, res) => {
+  try {
+    const account = req.body?.account
+    const config = resolveEmailConfig(account)
+
+    await withImapClient(account, async (client) => {
+      await client.mailboxOpen('INBOX', { readOnly: true })
+    })
+
+    const transporter = nodemailer.createTransport({
+      host: config.smtp.host,
+      port: config.smtp.port,
+      secure: config.smtp.secure,
+      auth: {
+        user: config.email,
+        pass: config.password,
+      },
+    })
+    await transporter.verify()
+
+    res.json({ ok: true, message: 'Connessione IMAP/SMTP riuscita' })
+  } catch (error) {
+    const provider = String(req.body?.account?.provider || 'custom').toLowerCase()
+    res.status(400).json({ ok: false, error: normalizeEmailError(error, provider) })
+  }
+})
+
+app.post('/email/folders', async (req, res) => {
+  try {
+    const account = req.body?.account
+    const folders = await withImapClient(account, async (client) => {
+      const listing = await client.list()
+      return listing.map((item) => ({
+        path: item.path,
+        name: item.name,
+        specialUse: item.specialUse || null,
+      }))
+    })
+
+    res.json({ ok: true, folders })
+  } catch (error) {
+    const provider = String(req.body?.account?.provider || 'custom').toLowerCase()
+    res.status(400).json({ ok: false, error: normalizeEmailError(error, provider) })
+  }
+})
+
+app.post('/email/messages', async (req, res) => {
+  try {
+    const account = req.body?.account
+    const folder = normalizeMailboxPath(req.body?.folder)
+    const page = Math.max(1, Number.parseInt(String(req.body?.page || 1), 10) || 1)
+    const pageSize = Math.min(100, Math.max(1, Number.parseInt(String(req.body?.pageSize || 25), 10) || 25))
+    const query = String(req.body?.query || '').trim().toLowerCase()
+
+    const payload = await withImapClient(account, async (client) => {
+      const mailbox = await client.mailboxOpen(folder, { readOnly: true })
+      const allUids = await client.search({ all: true })
+      const sorted = [...allUids].sort((a, b) => b - a)
+      const startIndex = (page - 1) * pageSize
+      const pageUids = sorted.slice(startIndex, startIndex + pageSize)
+
+      const messages = []
+      if (pageUids.length > 0) {
+        for await (const msg of client.fetch(pageUids, {
+          uid: true,
+          envelope: true,
+          internalDate: true,
+          flags: true,
+          bodyStructure: true,
+        })) {
+          const from = mapAddressList(msg.envelope?.from)
+          const to = mapAddressList(msg.envelope?.to)
+          const subject = String(msg.envelope?.subject || '(senza oggetto)')
+          const bodyPreview = messagePreview(subject)
+          const item = {
+            uid: msg.uid,
+            messageId: String(msg.envelope?.messageId || ''),
+            subject,
+            from,
+            to,
+            date: msg.internalDate ? new Date(msg.internalDate).toISOString() : null,
+            seen: Array.isArray(msg.flags) ? msg.flags.includes('\\Seen') : false,
+            flagged: Array.isArray(msg.flags) ? msg.flags.includes('\\Flagged') : false,
+            hasAttachment: Boolean(msg.bodyStructure?.childNodes?.some((node) => node.disposition === 'attachment')),
+            preview: bodyPreview,
+          }
+
+          if (!query) {
+            messages.push(item)
+          } else {
+            const haystack = `${subject} ${from.join(' ')} ${to.join(' ')} ${bodyPreview}`.toLowerCase()
+            if (haystack.includes(query)) messages.push(item)
+          }
+        }
+      }
+
+      return {
+        folder: mailbox.path,
+        page,
+        pageSize,
+        total: sorted.length,
+        messages,
+      }
+    })
+
+    res.json({ ok: true, ...payload })
+  } catch (error) {
+    const provider = String(req.body?.account?.provider || 'custom').toLowerCase()
+    res.status(400).json({ ok: false, error: normalizeEmailError(error, provider) })
+  }
+})
+
+app.post('/email/previews', async (req, res) => {
+  try {
+    const account = req.body?.account
+    const folder = normalizeMailboxPath(req.body?.folder)
+    const uids = Array.isArray(req.body?.uids)
+      ? req.body.uids
+        .map((uid) => Number.parseInt(String(uid), 10))
+        .filter((uid) => Number.isFinite(uid) && uid > 0)
+      : []
+
+    if (uids.length === 0) {
+      return res.json({ ok: true, previews: {} })
+    }
+
+    const limited = uids.slice(0, 20)
+
+    const previews = await withImapClient(account, async (client) => {
+      await client.mailboxOpen(folder, { readOnly: true })
+      const next = {}
+
+      for (const uid of limited) {
+        try {
+          const message = await client.fetchOne(uid, {
+            source: true,
+          }, { uid: true })
+          if (!message?.source) {
+            next[String(uid)] = ''
+            continue
+          }
+
+          const parsed = await simpleParser(message.source)
+          const sourceText = String(parsed.text || parsed.html || '')
+          next[String(uid)] = messagePreview(sourceText)
+        } catch {
+          next[String(uid)] = ''
+        }
+      }
+
+      return next
+    })
+
+    res.json({ ok: true, previews })
+  } catch (error) {
+    const provider = String(req.body?.account?.provider || 'custom').toLowerCase()
+    res.status(400).json({ ok: false, error: normalizeEmailError(error, provider) })
+  }
+})
+
+app.post('/email/message', async (req, res) => {
+  try {
+    const account = req.body?.account
+    const folder = normalizeMailboxPath(req.body?.folder)
+    const uid = Number.parseInt(String(req.body?.uid || ''), 10)
+    if (!Number.isFinite(uid) || uid <= 0) {
+      return res.status(400).json({ ok: false, error: 'UID messaggio non valido' })
+    }
+
+    const message = await withImapClient(account, async (client) => {
+      await client.mailboxOpen(folder, { readOnly: true })
+      const iterator = client.fetchOne(uid, {
+        envelope: true,
+        internalDate: true,
+        flags: true,
+        source: true,
+      }, { uid: true })
+      const raw = await iterator
+      if (!raw) return null
+
+      const parsed = await simpleParser(raw.source)
+      return {
+        uid,
+        messageId: String(parsed.messageId || raw.envelope?.messageId || ''),
+        subject: String(parsed.subject || raw.envelope?.subject || '(senza oggetto)'),
+        from: mapAddressList(parsed.from?.value || raw.envelope?.from || []),
+        to: mapAddressList(parsed.to?.value || raw.envelope?.to || []),
+        cc: mapAddressList(parsed.cc?.value || raw.envelope?.cc || []),
+        bcc: mapAddressList(parsed.bcc?.value || raw.envelope?.bcc || []),
+        date: parsed.date ? parsed.date.toISOString() : (raw.internalDate ? new Date(raw.internalDate).toISOString() : null),
+        text: String(parsed.text || ''),
+        html: typeof parsed.html === 'string' ? parsed.html : '',
+        seen: Array.isArray(raw.flags) ? raw.flags.includes('\\Seen') : false,
+        flagged: Array.isArray(raw.flags) ? raw.flags.includes('\\Flagged') : false,
+        attachments: Array.isArray(parsed.attachments)
+          ? parsed.attachments.map((att) => ({
+            filename: att.filename || 'attachment',
+            contentType: att.contentType || 'application/octet-stream',
+            size: Number(att.size || 0),
+          }))
+          : [],
+      }
+    })
+
+    if (!message) return res.status(404).json({ ok: false, error: 'Messaggio non trovato' })
+    res.json({ ok: true, message })
+  } catch (error) {
+    const provider = String(req.body?.account?.provider || 'custom').toLowerCase()
+    res.status(400).json({ ok: false, error: normalizeEmailError(error, provider) })
+  }
+})
+
+app.post('/email/mark', async (req, res) => {
+  try {
+    const account = req.body?.account
+    const folder = normalizeMailboxPath(req.body?.folder)
+    const uid = Number.parseInt(String(req.body?.uid || ''), 10)
+    const seen = Boolean(req.body?.seen)
+    if (!Number.isFinite(uid) || uid <= 0) {
+      return res.status(400).json({ ok: false, error: 'UID messaggio non valido' })
+    }
+
+    await withImapClient(account, async (client) => {
+      await client.mailboxOpen(folder)
+      await client.messageFlagsSet(uid, seen ? ['\\Seen'] : [], { uid: true, silent: false })
+      if (!seen) {
+        await client.messageFlagsRemove(uid, ['\\Seen'], { uid: true, silent: false })
+      }
+    })
+
+    res.json({ ok: true })
+  } catch (error) {
+    const provider = String(req.body?.account?.provider || 'custom').toLowerCase()
+    res.status(400).json({ ok: false, error: normalizeEmailError(error, provider) })
+  }
+})
+
+app.post('/email/flag', async (req, res) => {
+  try {
+    const account = req.body?.account
+    const folder = normalizeMailboxPath(req.body?.folder)
+    const uid = Number.parseInt(String(req.body?.uid || ''), 10)
+    const flagged = Boolean(req.body?.flagged)
+
+    if (!Number.isFinite(uid) || uid <= 0) {
+      return res.status(400).json({ ok: false, error: 'UID messaggio non valido' })
+    }
+
+    await withImapClient(account, async (client) => {
+      await client.mailboxOpen(folder)
+      if (flagged) {
+        await client.messageFlagsAdd(uid, ['\\Flagged'], { uid: true, silent: false })
+      } else {
+        await client.messageFlagsRemove(uid, ['\\Flagged'], { uid: true, silent: false })
+      }
+    })
+
+    res.json({ ok: true })
+  } catch (error) {
+    const provider = String(req.body?.account?.provider || 'custom').toLowerCase()
+    res.status(400).json({ ok: false, error: normalizeEmailError(error, provider) })
+  }
+})
+
+app.post('/email/move', async (req, res) => {
+  try {
+    const account = req.body?.account
+    const fromFolder = normalizeMailboxPath(req.body?.fromFolder)
+    const toFolder = normalizeMailboxPath(req.body?.toFolder)
+    const uid = Number.parseInt(String(req.body?.uid || ''), 10)
+    const messageId = String(req.body?.messageId || '').trim()
+
+    if (!toFolder) {
+      return res.status(400).json({ ok: false, error: 'Cartella di destinazione non valida' })
+    }
+
+    await withImapClient(account, async (client) => {
+      await moveMessageByUidOrMessageId(client, {
+        sourceFolder: fromFolder,
+        destinationFolder: toFolder,
+        uid,
+        messageId,
+      })
+    })
+
+    res.json({ ok: true, fromFolder, toFolder })
+  } catch (error) {
+    const provider = String(req.body?.account?.provider || 'custom').toLowerCase()
+    res.status(400).json({ ok: false, error: normalizeEmailError(error, provider) })
+  }
+})
+
+app.post('/email/archive', async (req, res) => {
+  try {
+    const account = req.body?.account
+    const folder = normalizeMailboxPath(req.body?.folder)
+    const uid = Number.parseInt(String(req.body?.uid || ''), 10)
+
+    if (!Number.isFinite(uid) || uid <= 0) {
+      return res.status(400).json({ ok: false, error: 'UID messaggio non valido' })
+    }
+
+    const archivePath = await withImapClient(account, async (client) => {
+      const archivePath = await resolveArchiveMailboxPath(client)
+      await moveMessageByUidOrMessageId(client, {
+        sourceFolder: folder,
+        destinationFolder: archivePath,
+        uid,
+      })
+      return await ensureMailboxExists(client, archivePath)
+    })
+
+    res.json({ ok: true, archivePath })
+  } catch (error) {
+    const provider = String(req.body?.account?.provider || 'custom').toLowerCase()
+    res.status(400).json({ ok: false, error: normalizeEmailError(error, provider) })
+  }
+})
+
+app.post('/email/delete', async (req, res) => {
+  try {
+    const account = req.body?.account
+    const folder = normalizeMailboxPath(req.body?.folder)
+    const uid = Number.parseInt(String(req.body?.uid || ''), 10)
+    if (!Number.isFinite(uid) || uid <= 0) {
+      return res.status(400).json({ ok: false, error: 'UID messaggio non valido' })
+    }
+
+    const trashPath = await withImapClient(account, async (client) => {
+      const trashPath = await resolveTrashMailboxPath(client)
+      await moveMessageByUidOrMessageId(client, {
+        sourceFolder: folder,
+        destinationFolder: trashPath,
+        uid,
+        messageId: String(req.body?.messageId || '').trim(),
+      })
+      return await ensureMailboxExists(client, trashPath)
+    })
+
+    res.json({ ok: true, trashPath })
+  } catch (error) {
+    const provider = String(req.body?.account?.provider || 'custom').toLowerCase()
+    res.status(400).json({ ok: false, error: normalizeEmailError(error, provider) })
+  }
+})
+
+app.post('/email/folder/create', async (req, res) => {
+  try {
+    const account = req.body?.account
+    const path = normalizeMailboxPath(req.body?.path)
+    if (!path) {
+      return res.status(400).json({ ok: false, error: 'Nome cartella non valido' })
+    }
+
+    await withImapClient(account, async (client) => {
+      await ensureMailboxExists(client, path)
+    })
+
+    res.json({ ok: true, path })
+  } catch (error) {
+    const provider = String(req.body?.account?.provider || 'custom').toLowerCase()
+    res.status(400).json({ ok: false, error: normalizeEmailError(error, provider) })
+  }
+})
+
+app.post('/email/folder/rename', async (req, res) => {
+  try {
+    const account = req.body?.account
+    const path = normalizeMailboxPath(req.body?.path)
+    const newPath = normalizeMailboxPath(req.body?.newPath)
+
+    if (!path || !newPath) {
+      return res.status(400).json({ ok: false, error: 'Percorso cartella non valido' })
+    }
+    if (path.toUpperCase() === 'INBOX') {
+      return res.status(400).json({ ok: false, error: 'INBOX non può essere rinominata' })
+    }
+
+    await withImapClient(account, async (client) => {
+      await client.mailboxRename(path, newPath)
+    })
+
+    res.json({ ok: true, path: newPath })
+  } catch (error) {
+    const provider = String(req.body?.account?.provider || 'custom').toLowerCase()
+    res.status(400).json({ ok: false, error: normalizeEmailError(error, provider) })
+  }
+})
+
+app.post('/email/folder/delete', async (req, res) => {
+  try {
+    const account = req.body?.account
+    const path = normalizeMailboxPath(req.body?.path)
+
+    if (!path) {
+      return res.status(400).json({ ok: false, error: 'Percorso cartella non valido' })
+    }
+    if (path.toUpperCase() === 'INBOX') {
+      return res.status(400).json({ ok: false, error: 'INBOX non può essere eliminata' })
+    }
+
+    await withImapClient(account, async (client) => {
+      await client.mailboxDelete(path)
+    })
+
+    res.json({ ok: true })
+  } catch (error) {
+    const provider = String(req.body?.account?.provider || 'custom').toLowerCase()
+    res.status(400).json({ ok: false, error: normalizeEmailError(error, provider) })
+  }
+})
+
+app.post('/email/send', async (req, res) => {
+  try {
+    const account = req.body?.account
+    const config = resolveEmailConfig(account)
+    const to = String(req.body?.to || '').trim()
+    const cc = String(req.body?.cc || '').trim()
+    const bcc = String(req.body?.bcc || '').trim()
+    const subject = String(req.body?.subject || '').trim()
+    const text = String(req.body?.text || '').trim()
+    const html = String(req.body?.html || '').trim()
+
+    if (!to) {
+      return res.status(400).json({ ok: false, error: 'Campo TO obbligatorio' })
+    }
+    if (!text && !html) {
+      return res.status(400).json({ ok: false, error: 'Inserisci contenuto email (testo o html)' })
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: config.smtp.host,
+      port: config.smtp.port,
+      secure: config.smtp.secure,
+      auth: {
+        user: config.email,
+        pass: config.password,
+      },
+    })
+
+    const info = await transporter.sendMail({
+      from: config.email,
+      to,
+      cc: cc || undefined,
+      bcc: bcc || undefined,
+      subject: subject || '(senza oggetto)',
+      text: text || undefined,
+      html: html || undefined,
+    })
+
+    res.json({ ok: true, messageId: info.messageId })
+  } catch (error) {
+    const provider = String(req.body?.account?.provider || 'custom').toLowerCase()
+    res.status(400).json({ ok: false, error: normalizeEmailError(error, provider) })
+  }
+})
 
 app.post('/secure-browser/open-default', async (req, res) => {
   const requestedUrl = String(req.body?.url || '').trim()

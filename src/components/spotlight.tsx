@@ -77,7 +77,12 @@ export default function Spotlight() {
     }
 
     const openAppById = (id: string) => {
-        if (!canUsePermission(id, 'launch')) return
+        if (!canUsePermission(id, 'launch')) {
+            if (canUsePermission('settings', 'notifications')) {
+                notify(`Permesso negato: avvio disabilitato per ${id}.`, 'warning')
+            }
+            return
+        }
         const app = apps.get(id)
         if (!app) return
         openWindow(app, id)

@@ -8,6 +8,7 @@ import { percentToPx } from '@/utils/viewport';
 import { FilePlus, Folder, FolderPlus, HardDrive, LayoutGrid, LayoutList, MoreHorizontal } from 'lucide-react';
 import clsx from 'clsx';
 import { usePersistentStore } from '@/providers/persistent-store';
+import { useNotifications } from '@/providers/notifications';
 
 type FileItem = {
   name: string
@@ -38,6 +39,7 @@ const BASE_URL = "https://www.gh3sp.com/cloud/api";
 
 export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
   const { apps, canUsePermission } = useApps()
+  const { notify } = useNotifications()
   const [items, setItems] = useState<FileItem[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedItem, setSelectedItem] = useState<FileItem | null>(null)
@@ -85,12 +87,14 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ windowId }) => {
       const message = `Permesso negato (${action}): filesystem disabilitato per File Explorer.`
       setError(message)
       showToast(message)
+      if (canUsePermission('settings', 'notifications')) notify(message, 'warning')
       return false
     }
     if (!canUsePermission('file-explorer', 'network')) {
       const message = `Permesso negato (${action}): network disabilitato per File Explorer.`
       setError(message)
       showToast(message)
+      if (canUsePermission('settings', 'notifications')) notify(message, 'warning')
       return false
     }
     return true

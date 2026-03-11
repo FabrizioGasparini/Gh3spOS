@@ -1,6 +1,7 @@
 import type { AuthUser } from "@/providers/auth";
 import type { AppPermissionKey } from "@/providers/apps";
 import type { AppDefinition, WindowInstance, WidgetInstance } from "@/types";
+import type { NotificationType } from "@/providers/notifications";
 
 export type FsNodeType = "file" | "folder";
 
@@ -26,6 +27,7 @@ export interface TerminalContext {
     isInstalled: (id: string) => boolean;
     isEnabled: (id: string) => boolean;
     canUsePermission: (id: string, permission: AppPermissionKey) => boolean;
+    notifyPermissionDenied: (message: string, type?: NotificationType) => void;
     startSshSession: (config: { host: string; port: number; username: string; password: string }) => Promise<string>;
     stopSshSession: () => void;
     isSshSessionActive: () => boolean;

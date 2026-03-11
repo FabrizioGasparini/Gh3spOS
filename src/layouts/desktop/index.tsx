@@ -13,12 +13,14 @@ import { useSpotlight } from "@/providers/spotlight";
 import { useApps } from "@/providers/apps";
 import { useWindowManager } from "@/providers/window-manager";
 import { useAuth } from "@/providers/auth";
+import { useNotifications } from "@/providers/notifications";
 
 const Desktop = () => {
   const { wallpaper } = useWallpaper();
   const { open: openSpotlight } = useSpotlight()
   const { apps, canUsePermission } = useApps()
   const { openWindow } = useWindowManager()
+  const { notify } = useNotifications()
   const { logout } = useAuth()
   const [storedSettings, setStoredSettings] = usePersistentStore<DesktopSettings>('gh3sp:settings', DEFAULT_DESKTOP_SETTINGS)
   const [, setActiveSection] = usePersistentStore<'appearance' | 'desktop' | 'windows' | 'notifications' | 'widgets' | 'users' | 'system'>('gh3sp:settings:active-section', 'appearance')
@@ -54,7 +56,12 @@ const Desktop = () => {
   }, [])
 
   const openApp = (appId: string) => {
-    if (!canUsePermission(appId, 'launch')) return
+    if (!canUsePermission(appId, 'launch')) {
+      if (canUsePermission('settings', 'notifications')) {
+        notify(`Permesso negato: avvio disabilitato per ${appId}.`, 'warning')
+      }
+      return
+    }
     const app = apps.get(appId)
     if (!app) return
     openWindow(app, appId)

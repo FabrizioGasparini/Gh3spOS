@@ -9,6 +9,7 @@ import type { FsNodeMeta, TerminalContext } from './types'
 import { Terminal as XTerm } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import { useAuth } from '@/providers/auth'
+import { useNotifications } from '@/providers/notifications'
 
 const SUDO_TIMEOUT_MS = 5 * 60 * 1000
 
@@ -38,6 +39,7 @@ export const Terminal = ({ windowId }: { windowId: string }) => {
 
 const TerminalSession = ({ windowId, sessionId }: { windowId: string; sessionId: string }) => {
 	const { apps, catalog, installApp, uninstallApp, setAppEnabled, isInstalled, isEnabled, canUsePermission } = useApps()
+	const { notify } = useNotifications()
 	const { currentUser } = useAuth()
 
 	const USERNAME = currentUser?.username || 'gh3sp'
@@ -222,6 +224,9 @@ const TerminalSession = ({ windowId, sessionId }: { windowId: string; sessionId:
 		isInstalled,
 		isEnabled,
 		canUsePermission,
+		notifyPermissionDenied: (message, type = 'warning') => {
+			if (canUsePermission('settings', 'notifications')) notify(message, type)
+		},
 		startSshSession,
 		stopSshSession,
 		isSshSessionActive,
@@ -241,7 +246,7 @@ const TerminalSession = ({ windowId, sessionId }: { windowId: string; sessionId:
 		setCwd,
 		fsMeta: safeFsMeta,
 		setFsMeta,
-	}), [USERNAME, HOSTNAME, isRoot, setIsRoot, rootPassword, setRootPassword, apps, packageIds, installApp, uninstallApp, setAppEnabled, isInstalled, isEnabled, canUsePermission, windows, windowId, widgets, removeWidget, openWindow, closeWindow, setWallpaper, currentUser, setOutput, commands, setCommands, cwd, setCwd, safeFsMeta, setFsMeta])
+	}), [USERNAME, HOSTNAME, isRoot, setIsRoot, rootPassword, setRootPassword, apps, packageIds, installApp, uninstallApp, setAppEnabled, isInstalled, isEnabled, canUsePermission, notify, windows, windowId, widgets, removeWidget, openWindow, closeWindow, setWallpaper, currentUser, setOutput, commands, setCommands, cwd, setCwd, safeFsMeta, setFsMeta])
 	const contextRef = useRef(context)
 
 	useEffect(() => {

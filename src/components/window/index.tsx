@@ -42,9 +42,9 @@ export const Window = ({ window }: { window: WindowInstance }) => {
 	const getSnapTarget = (x: number, y: number, screenWidth: number, screenHeight: number): SnapTarget | null => {
 		const topSafePercent = getTopSafePercent(screenHeight)
 		const availableHeight = 100 - topSafePercent
-		const edgeX = Math.max(SNAP_THRESHOLD, Math.round(screenWidth * 0.06))
-		const edgeY = Math.max(SNAP_THRESHOLD, Math.round(screenHeight * 0.08))
-		const topSnapLimit = MENU_BAR_HEIGHT_PX + edgeY
+		const edgeX = Math.max(SNAP_THRESHOLD, Math.round(screenWidth * 0.02))
+		const edgeY = Math.max(SNAP_THRESHOLD, Math.round(screenHeight * 0.01))
+		const topSnapLimit = edgeY
 
 		const nearLeft = x <= edgeX
 		const nearRight = x >= (screenWidth - edgeX)

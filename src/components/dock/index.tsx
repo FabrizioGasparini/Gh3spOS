@@ -4,12 +4,12 @@ import type { AppDefinition } from '@/types'
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { usePreviewRefs } from "@/providers/preview-refs"
 import html2canvas from 'html2canvas-pro'
-import { Minimize, X } from 'lucide-react'
+import { Minimize, PinIcon, PinOffIcon, X } from 'lucide-react'
 import { usePersistentStore } from '@/providers/persistent-store'
 import { DEFAULT_DESKTOP_SETTINGS, resolveDesktopSettings, type DesktopSettings } from '@/config/system-settings'
 
 export const Dock = () => {
-  const { apps } = useApps()
+  const { apps, setPinned, isPinned } = useApps()
   const { windows, openWindow, focusWindow, minimizeWindow, closeWindow } = useWindowManager()
   const [hoveredAppId, setHoveredAppId] = useState<string | null>(null)
   const [dockMouseAxis, setDockMouseAxis] = useState<number | null>(null)
@@ -18,6 +18,7 @@ export const Dock = () => {
   const [isNearRevealEdge, setIsNearRevealEdge] = useState(false)
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [previews, setPreviews] = useState<Record<string, string>>({})
+  const previousMinimizedStateRef = useRef<Record<string, boolean>>({})
   const { getPreviewRef } = usePreviewRefs()
   const [storedSettings] = usePersistentStore<DesktopSettings>('gh3sp:settings', DEFAULT_DESKTOP_SETTINGS)
   const settings = useMemo(() => resolveDesktopSettings(storedSettings), [storedSettings])
@@ -26,7 +27,7 @@ export const Dock = () => {
   const [contextMenu, setContextMenu] = useState<{
     appId: string
     position: { x: number, y: number }
-    openUpwards: boolean
+    direction: 'up' | 'right' | 'left'
   } | null>(null)
 	
   const menuRef = useRef<HTMLUListElement>(null)
@@ -78,6 +79,50 @@ export const Dock = () => {
     }
   }, [hoveredAppId, windows, getPreviewRef, previews])
 
+  useEffect(() => {
+    let cancelled = false
+
+    const captureMinimizedTransitions = async () => {
+      for (const win of windows) {
+        const wasMinimized = previousMinimizedStateRef.current[win.id] === true
+        const isNowMinimized = win.isMinimized === true
+
+        if (!wasMinimized && isNowMinimized && !previews[win.id]) {
+          const el = getPreviewRef(win.id)
+          if (!el) continue
+
+          try {
+            const canvas = await html2canvas(el, {
+              backgroundColor: null,
+              removeContainer: true,
+              scale: 1,
+            })
+
+            if (cancelled) return
+            setPreviews((prev) => {
+              if (prev[win.id]) return prev
+              return { ...prev, [win.id]: canvas.toDataURL('image/webp', 0.72) }
+            })
+          } catch {
+            // best effort
+          }
+        }
+      }
+
+      if (!cancelled) {
+        previousMinimizedStateRef.current = windows.reduce<Record<string, boolean>>((acc, win) => {
+          acc[win.id] = Boolean(win.isMinimized)
+          return acc
+        }, {})
+      }
+    }
+
+    void captureMinimizedTransitions()
+    return () => {
+      cancelled = true
+    }
+  }, [windows, previews, getPreviewRef])
+
   const extraWindows: Map<string, AppDefinition> = useMemo(() => new Map(
     windows
       .filter(win => ![...apps.entries()].some(([id, app]) => id === win.appId && app.isPinned))
@@ -120,28 +165,32 @@ export const Dock = () => {
 	const target = e.currentTarget as HTMLElement
 	const rect = target.getBoundingClientRect()
 
-	// Posizione orizzontale: centro dell'icona
-	const clickX = rect.left + rect.width / 2
-	// Posizione verticale: sopra l'icona
-	const clickY = rect.top
-
-	// Apri verso l'alto sempre (o mantieni la condizione se preferisci)
-	const openUpwards = true
+  const clickX = rect.left + rect.width / 2
+  const clickY = rect.top + rect.height / 2
+  const direction = settings.dockPosition === 'left'
+    ? 'right'
+    : settings.dockPosition === 'right'
+      ? 'left'
+      : 'up'
 
 	setContextMenu({
 		appId,
 		position: { x: clickX, y: clickY },
-		openUpwards
+    direction
 	})
   }
 
   const closeContextMenu = () => setContextMenu(null)
 
+  const schedulePreviewHide = (delay = 220) => {
+    if (hoverTimeout.current) clearTimeout(hoverTimeout.current)
+    hoverTimeout.current = setTimeout(() => setHoveredAppId(null), delay)
+  }
+
   const handleDockLeave = () => {
     setDockMouseAxis(null)
     setIsDockHovered(false)
-    if (hoverTimeout.current) clearTimeout(hoverTimeout.current)
-    hoverTimeout.current = setTimeout(() => setHoveredAppId(null), 120)
+    schedulePreviewHide(160)
   }
 
   const dockPositionClass = settings.dockPosition === 'left'
@@ -174,6 +223,22 @@ export const Dock = () => {
 
   const hasMaximizedWindow = windows.some((w) => w.isMaximized)
   const shouldRevealWhenMaximized = hasMaximizedWindow ? (isNearRevealEdge || isDockHovered || hoveredAppId !== null) : true
+  const shouldRevealWhenAutoHide = settings.dockAutoHide ? (isNearRevealEdge || isDockHovered || hoveredAppId !== null) : true
+  const shouldHideDock = hasMaximizedWindow
+    ? !shouldRevealWhenMaximized
+    : settings.dockAutoHide && !shouldRevealWhenAutoHide
+
+  const hiddenDockTransform = settings.dockPosition === 'bottom'
+    ? 'translate(0, 28px)'
+    : settings.dockPosition === 'left'
+      ? 'translate(-28px, 0)'
+      : 'translate(28px, 0)'
+
+  const previewPanelPositionClass = settings.dockPosition === 'left'
+    ? 'left-full ml-3 top-1/2 -translate-y-1/2'
+    : settings.dockPosition === 'right'
+      ? 'right-full mr-3 top-1/2 -translate-y-1/2'
+      : 'bottom-20 left-1/2 -translate-x-1/2'
 
   // Azioni menu contestuale
   const handleContextMenuAction = (action: string, appId: string) => {
@@ -182,6 +247,16 @@ export const Dock = () => {
       case 'open-new': {
         const app = apps.get(appId)
         if (app) openWindow(app, appId)
+        break
+      }
+      case 'remove-pinned': {
+        const app = apps.get(appId)
+        if (app) setPinned(appId, false)
+        break
+      }
+      case 'add-pinned': {
+        const app = apps.get(appId)
+        if (app) setPinned(appId, true)
         break
       }
       case 'minimize-all':
@@ -198,20 +273,12 @@ export const Dock = () => {
     <>
       {/* Dock normale */}
       <div
-  		className={`fixed ${dockPositionClass} z-[95] flex items-end gap-3 px-4 py-2 rounded-2xl border border-white/25 bg-white/12 backdrop-blur-2xl shadow-[0_15px_45px_rgba(0,0,0,0.5)] transition-all duration-200`}
+        className={`fixed ${dockPositionClass} z-[95] flex items-end gap-3 px-4 py-2 rounded-2xl border border-white/25 bg-white/12 backdrop-blur-2xl shadow-[0_15px_45px_rgba(0,0,0,0.5)] transition-all duration-200`}
         style={{
           display: 'flex',
-          opacity: hasMaximizedWindow
-            ? (shouldRevealWhenMaximized ? 1 : 0.02)
-            : (settings.dockAutoHide && !isDockHovered ? 0.12 : 1),
-          transform: hasMaximizedWindow && !shouldRevealWhenMaximized
-            ? (settings.dockPosition === 'bottom'
-              ? 'translate(-50%, 28px)'
-              : settings.dockPosition === 'left'
-                ? 'translate(-28px, -50%)'
-                : 'translate(28px, -50%)')
-            : undefined,
-          pointerEvents: hasMaximizedWindow && !shouldRevealWhenMaximized ? 'none' : 'auto',
+          opacity: shouldHideDock ? 0.02 : 1,
+          transform: shouldHideDock ? hiddenDockTransform : undefined,
+          pointerEvents: shouldHideDock ? 'none' : 'auto',
         }}
         onMouseMove={(e) => setDockMouseAxis(settings.dockPosition === 'bottom' ? e.clientX : e.clientY)}
         onMouseEnter={() => setIsDockHovered(true)}
@@ -238,7 +305,7 @@ export const Dock = () => {
                 setHoveredAppId(id)
               }}
               onMouseLeave={() => {
-                hoverTimeout.current = setTimeout(() => setHoveredAppId(null), 200)
+                schedulePreviewHide(260)
               }}
               onContextMenu={(e) => handleContextMenu(e, id)}
             >
@@ -284,30 +351,58 @@ export const Dock = () => {
                   onMouseEnter={() => {
                     if (hoverTimeout.current) clearTimeout(hoverTimeout.current)
                   }}
-                  onMouseLeave={() => setHoveredAppId(null)}
-                  className="absolute flex gap-1 bottom-20 left-1/2 -translate-x-1/2 bg-black/45 backdrop-blur-xl border border-white/20 rounded-xl shadow-2xl z-40 p-2 space-y-2 max-h-50 overflow-y-auto"
+                  onMouseLeave={() => schedulePreviewHide(220)}
+                  className={`absolute ${previewPanelPositionClass} bg-[#111827]/88 backdrop-blur-xl border border-white/20 rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.52)] z-40 p-2.5 max-h-[62vh] overflow-y-auto w-[292px]`}
                 >
-                  {matchingWindows.length == 0 && <span className="truncate text-center">{app.name}</span>}
+                  {matchingWindows.length === 0 && (
+                    <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/75 text-center">
+                      {app.name}
+                    </div>
+                  )}
                   {matchingWindows.map(win => (
                     <div
                       key={win.id}
                       onClick={() => { focusWindow(win.id, true); setHoveredAppId(null) }}
-                      className="flex flex-col max-w-60 items-center gap-2 px-1 py-1 text-white text-sm bg-black/20 hover:bg-white/5 rounded cursor-pointer"
+                      className="group rounded-xl border border-white/10 bg-white/[0.05] hover:bg-white/[0.1] transition cursor-pointer overflow-hidden mb-2 last:mb-0"
                     >
-                      <div className='relative w-full gap-2 flex items-center' title={win.title || app.name}>
-                        <span className="overflow-hidden text-ellipsis whitespace-nowrap max-w-[150px] ml-2 w-full text-left">{win.title || app.name}</span>
-                        <button className='w-3 h-3 px-1.5 mr-2 rounded-full bg-red-500 hover:bg-red-400 cursor-pointer' onClick={() => { closeWindow(win.id); setHoveredAppId(null) }}></button>
+                      <div className='relative w-full gap-2 flex items-center px-2.5 py-2 border-b border-white/10' title={win.title || app.name}>
+                        <span className="overflow-hidden text-ellipsis whitespace-nowrap w-full text-left text-xs text-white/90">{win.title || app.name}</span>
+                        <button
+                          className='h-5 w-5 inline-flex items-center justify-center rounded-md bg-rose-500/75 hover:bg-rose-500 text-white/95 cursor-pointer text-[11px] leading-none'
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            closeWindow(win.id)
+                            setHoveredAppId(null)
+                          }}
+                        >
+                          ×
+                        </button>
                       </div>
-                      {
-                        matchingWindows.length > 0 &&
-                        <div className="w-44 h-fit origin-top-left overflow-hidden pointer-events-none rounded border border-white/10 shadow-md">
-                          <img
-                            src={previews[win.id]}
-                            alt="Loading Preview..."
-                            className="w-full object-cover rounded"
-                          />
+
+                      <div className="p-2">
+                        <div className="h-[136px] w-full origin-top-left overflow-hidden pointer-events-none rounded-lg border border-white/10 bg-black/35 shadow-inner">
+                          {previews[win.id] ? (
+                            <img
+                              src={previews[win.id]}
+                              alt={win.title || app.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="h-full w-full flex items-center justify-center text-[11px] text-white/55 px-3 text-center">
+                              {win.isMinimized ? (
+                                <div className="space-y-1.5">
+                                  <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/30 bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-100">
+                                    <Minimize className="h-3 w-3" /> Minimizzata
+                                  </div>
+                                  <p>Clicca per ripristinare la finestra.</p>
+                                </div>
+                              ) : (
+                                'Anteprima in caricamento...'
+                              )}
+                            </div>
+                          )}
                         </div>
-                      }
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -318,25 +413,33 @@ export const Dock = () => {
       </div>
 
       {/* Context Menu fisso (fisso bottom-left, ad esempio) */}
-	{contextMenu && (
+  {contextMenu && (
 		<ul
 			onContextMenu={e => e.preventDefault()}
 			style={{
 				position: 'fixed',
-				left: contextMenu.position.x,
-				top: contextMenu.openUpwards
-					? contextMenu.position.y - (windows.filter(w => w.appId === contextMenu.appId).length > 0 ? 130 : 55) // menu sopra l'icona
-					: contextMenu.position.y,
+        left: contextMenu.direction === 'up'
+          ? contextMenu.position.x
+          : contextMenu.direction === 'right'
+            ? contextMenu.position.x + 42
+            : contextMenu.position.x - 42,
+        top: contextMenu.direction === 'up'
+          ? contextMenu.position.y - (windows.filter(w => w.appId === contextMenu.appId).length > 0 ? 130 : 55)
+          : contextMenu.position.y,
 				minWidth: 180,
 				maxWidth: 250,
 				padding: '8px 0',
 				borderRadius: 12,
-				backgroundColor: 'rgba(255, 255, 255, 0.12)',
-				backdropFilter: 'blur(12px)',
+        backgroundColor: 'rgba(17, 24, 39, 0.88)',
+        backdropFilter: 'blur(18px)',
 				boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
 				zIndex: 9999,
 				userSelect: 'none',
-				transform: 'translateX(-50%)' // per centrare orizzontalmente rispetto all'icona
+        transform: contextMenu.direction === 'up'
+          ? 'translateX(-50%)'
+          : contextMenu.direction === 'right'
+            ? 'translateY(-50%)'
+            : 'translate(-100%, -50%)'
 			}}
 			className="liquid-glass-menu"
 			ref={menuRef}
@@ -357,6 +460,14 @@ export const Dock = () => {
 				apps.get(contextMenu.appId)?.icon
 				)}
 				{apps.get(contextMenu.appId)?.name}
+			</li>
+			<li
+			
+				className="context-menu-item flex items-center gap-2"
+        onClick={() => handleContextMenuAction(isPinned(contextMenu.appId) ? 'remove-pinned' : 'add-pinned', contextMenu.appId)}
+			>
+				{isPinned(contextMenu.appId) ? <PinOffIcon className="w-4 h-4" /> : <PinIcon className="w-4 h-4" />}
+        {isPinned(contextMenu.appId) ? "Rimuovi dalla barra" : "Aggiungi alla barra"}
 			</li>
 			{
 				windows.filter(w => w.appId === contextMenu.appId).length > 0 &&

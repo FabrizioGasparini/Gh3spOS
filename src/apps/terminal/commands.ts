@@ -417,7 +417,9 @@ const ensureTerminalPermission = (
     action: string,
 ) => {
     if (context.canUsePermission("terminal", permission)) return "";
-    return `${action}: permission denied by policy (${permission})`;
+    const message = `${action}: permission denied by policy (${permission})`;
+    context.notifyPermissionDenied(`Terminal: ${message}`, "warning");
+    return message;
 };
 
 type ParsedSshArgs =

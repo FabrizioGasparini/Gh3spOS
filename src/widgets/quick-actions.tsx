@@ -1,14 +1,19 @@
 import { useApps } from '@/providers/apps'
 import { useSpotlight } from '@/providers/spotlight'
 import { useWindowManager } from '@/providers/window-manager'
+import { useNotifications } from '@/providers/notifications'
 
 export const QuickActionsWidget: React.FC = () => {
 	const { open: openSpotlight } = useSpotlight()
 	const { apps, canUsePermission } = useApps()
+	const { notify } = useNotifications()
 	const { openWindow, windows, snappingEnabled, setSnappingEnabled } = useWindowManager()
 
 	const launch = (id: string) => {
-		if (!canUsePermission(id, 'launch')) return
+		if (!canUsePermission(id, 'launch')) {
+			if (canUsePermission('settings', 'notifications')) notify(`Permesso negato: avvio disabilitato per ${id}.`, 'warning')
+			return
+		}
 		const app = apps.get(id)
 		if (!app) return
 		openWindow(app, id)

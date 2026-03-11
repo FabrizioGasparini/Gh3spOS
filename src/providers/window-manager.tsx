@@ -5,6 +5,7 @@ import type { AppDefinition, SnapBounds, WindowInstance, WindowParamType } from 
 import { usePersistentStore } from './persistent-store'
 import { useApps } from './apps'
 import { DEFAULT_DESKTOP_SETTINGS, resolveDesktopSettings } from '@/config/system-settings'
+import { useNotifications } from './notifications'
 
 const MENU_BAR_HEIGHT_PX = 36
 
@@ -41,7 +42,8 @@ export const useWindowManager = () => {
 }
 
 export const WindowManagerProvider = ({ children }: { children: ReactNode }) => {
-	const { apps } = useApps()
+	const { apps, isInstalled, isEnabled, getPermission, canUsePermission } = useApps()
+	const { notify } = useNotifications()
 	const [windows, setWindows] = usePersistentStore<WindowInstance[]>('windows-manager:windows', [])
 	const [storedSettings, setStoredSettings] = usePersistentStore('gh3sp:settings', DEFAULT_DESKTOP_SETTINGS)
 	const settings = useMemo(() => resolveDesktopSettings(storedSettings), [storedSettings])
@@ -72,7 +74,20 @@ export const WindowManagerProvider = ({ children }: { children: ReactNode }) => 
 	}, [apps])
 
 	const openWindow = (app: AppDefinition, appId: string, params: Record<string, WindowParamType> = {}) => {
-		if (!apps.has(appId)) return null
+		if (!apps.has(appId)) {
+			let message = `Impossibile aprire ${app.name || appId}`
+			if (!isInstalled(appId)) {
+				message = `${app.name || appId}: app non installata.`
+			} else if (!isEnabled(appId)) {
+				message = `${app.name || appId}: app disabilitata.`
+			} else if (getPermission(appId, 'launch') === 'deny') {
+				message = `Permesso negato: avvio disabilitato per ${app.name || appId}.`
+			}
+			if (canUsePermission('settings', 'notifications')) {
+				notify(message, 'warning')
+			}
+			return null
+		}
 		if(app.singleInstance && windows.some(w => w.appId === appId)) {
 			const existingWindow = windows.find(w => w.appId === appId)
 			if (existingWindow) {
@@ -173,9 +188,16 @@ export const WindowManagerProvider = ({ children }: { children: ReactNode }) => 
 	}	
 
 	const renameWindow = (id: string, title: string) => {
-		setWindows(windows => 
-			windows.map(w => (w.id == id ? {...w, title} : w))
-		)
+		setWindows((windows) => {
+			let changed = false
+			const next = windows.map((w) => {
+				if (w.id !== id) return w
+				if (w.title === title) return w
+				changed = true
+				return { ...w, title }
+			})
+			return changed ? next : windows
+		})
 	}
 
 	const getWindowComponent = (id: string) => {

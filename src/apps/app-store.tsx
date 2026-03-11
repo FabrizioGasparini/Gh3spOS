@@ -4,7 +4,7 @@ import { useWindowManager } from '@/providers/window-manager'
 import { useNotifications } from '@/providers/notifications'
 
 export const AppStore: React.FC = () => {
-  const { catalog, isInstalled, isEnabled, isPinned, canUsePermission, installApp, uninstallApp, setAppEnabled, setPinned } = useApps()
+  const { catalog, isInstalled, isEnabled, isPinned, canLaunchApp, canUsePermission, installApp, uninstallApp, setAppEnabled, setPinned } = useApps()
   const { openWindow, windows, closeWindow } = useWindowManager()
   const { notify } = useNotifications()
   const [query, setQuery] = useState('')
@@ -85,6 +85,23 @@ export const AppStore: React.FC = () => {
     return [appImage(selected.definition.icon)]
   }, [selected])
 
+  const openWhenReady = (item: (typeof catalog)[number]) => {
+    const tryOpen = () => {
+      if (!canLaunchApp(item.id)) return false
+      openWindow(item.definition, item.id)
+      return true
+    }
+
+    if (tryOpen()) return
+    requestAnimationFrame(() => {
+      if (tryOpen()) return
+      setTimeout(() => {
+        if (tryOpen()) return
+        setJobMessage((prev) => ({ ...prev, [item.id]: 'App pronta ma non avviabile: verifica permessi e stato abilitazione.' }))
+      }, 80)
+    })
+  }
+
   const openAppFromStore = async (item: (typeof catalog)[number]) => {
     if (!canUsePermission(item.id, 'launch')) {
       const message = `Permesso negato: ${item.definition.name} non può essere avviata.`
@@ -94,12 +111,15 @@ export const AppStore: React.FC = () => {
       }
       return
     }
+
     if (!isInstalled(item.id)) {
       const ok = await installAppRuntime(item)
       if (!ok) return
     }
-    if (!isEnabled(item.id)) setAppEnabled(item.id, true)
-    openWindow(item.definition, item.id)
+    if (!isEnabled(item.id)) {
+      setAppEnabled(item.id, true)
+    }
+    openWhenReady(item)
   }
 
   const installAppRuntime = async (item: (typeof catalog)[number]) => {
@@ -141,7 +161,7 @@ export const AppStore: React.FC = () => {
     const installed = isInstalled(selected.id)
     const enabled = isEnabled(selected.id)
     const pinned = isPinned(selected.id)
-    const protectedApp = selected.id === 'settings' || selected.id === 'file-explorer' || selected.id === 'app-store'
+    const protectedApp = selected.id === 'settings' || selected.id === 'file-explorer' || selected.id === 'app-store' || selected.id === 'terminal'
     const currentJob = jobStatus[selected.id] ?? 'idle'
     const isBusy = currentJob !== 'idle'
 

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePersistentStore } from '@/providers/persistent-store'
 import { useAuth } from '@/providers/auth'
 import { useApps } from '@/providers/apps'
+import { useNotifications } from '@/providers/notifications'
 
 const REMOTE_BROWSER_URL = 'http://localhost:7900/vnc.html?autoconnect=1&resize=scale&view_only=0&reconnect=1'
 const DEFAULT_SECURE_BROWSER_URL = 'https://www.google.com'
@@ -34,6 +35,7 @@ const fetchSecureBrowser = async (path: string, init?: RequestInit): Promise<Sec
 export const BrowserApp: React.FC<{ windowId: string }> = () => {
 	const { currentUser } = useAuth()
 	const { canUsePermission } = useApps()
+	const { notify } = useNotifications()
 	const storagePrefix = useMemo(() => `browser:${currentUser?.id ?? 'default'}`, [currentUser?.id])
 	const canUseNetwork = canUsePermission('browser', 'network')
 
@@ -58,7 +60,9 @@ export const BrowserApp: React.FC<{ windowId: string }> = () => {
 	const runAction = useCallback(async (path: string, body?: Record<string, unknown>) => {
 		if (!canUseNetwork) {
 			setRemoteStatus('offline')
-			setStatusMessage('Permesso negato: network disabilitato per Browser')
+			const message = 'Permesso negato: network disabilitato per Browser'
+			setStatusMessage(message)
+			if (canUsePermission('settings', 'notifications')) notify(message, 'warning')
 			return
 		}
 		setStatusMessage('Esecuzione comando browser remoto...')
@@ -78,12 +82,14 @@ export const BrowserApp: React.FC<{ windowId: string }> = () => {
 			setRemoteStatus('offline')
 			setStatusMessage(String(error instanceof Error ? error.message : error))
 		}
-	}, [canUseNetwork, setLastUrl])
+	}, [canUseNetwork, canUsePermission, notify, setLastUrl])
 
 	useEffect(() => {
 		if (!canUseNetwork) {
 			setRemoteStatus('offline')
-			setStatusMessage('Permesso negato: network disabilitato per Browser')
+			const message = 'Permesso negato: network disabilitato per Browser'
+			setStatusMessage(message)
+			if (canUsePermission('settings', 'notifications')) notify(message, 'warning')
 			return
 		}
 		if (hasOpenedDefaultRef.current) return
@@ -93,7 +99,7 @@ export const BrowserApp: React.FC<{ windowId: string }> = () => {
 			await runAction('/secure-browser/open-default', { url: lastUrl || DEFAULT_SECURE_BROWSER_URL })
 			await syncCurrentUrl()
 		})()
-	}, [canUseNetwork, lastUrl, runAction, syncCurrentUrl])
+	}, [canUseNetwork, canUsePermission, notify, lastUrl, runAction, syncCurrentUrl])
 
 	useEffect(() => {
 		if (!canUseNetwork) return
